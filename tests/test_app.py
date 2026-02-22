@@ -84,21 +84,42 @@ class AppTests(unittest.TestCase):
     def test_clients_crud(self):
         self.login()
 
-        create_resp = self.client.post(
-            "/clients/nouveau",
-            data={"nom": "Mamadou Diallo", "telephone": "771234567", "adresse": "Dakar"},
+        create_route_resp = self.client.get("/clients/nouveau", follow_redirects=False)
+        self.assertEqual(create_route_resp.status_code, 302)
+        self.assertEqual(create_route_resp.headers.get("Location"), "/transactions/nouvelle")
+
+        create_tx_resp = self.client.post(
+            "/transactions/nouvelle",
+            data={
+                "client_id": "0",
+                "new_client_nom": "Mamadou Diallo",
+                "new_client_telephone": "771234567",
+                "new_client_adresse": "Dakar",
+                "new_client_remarque": "Client prioritaire",
+                "service_id": str(self.seed_service_id),
+                "quantite": "1",
+                "avance": "0",
+                "date_transaction": date.today().isoformat(),
+                "notes": "Client créé avec transaction",
+            },
             follow_redirects=False,
         )
-        self.assertEqual(create_resp.status_code, 302)
+        self.assertEqual(create_tx_resp.status_code, 302)
 
         with self.app.app_context():
             created = ModelClient.query.filter_by(nom="Mamadou Diallo").first()
             self.assertIsNotNone(created)
+            self.assertEqual(created.remarque, "Client prioritaire")
             created_id = created.id
 
         edit_resp = self.client.post(
             f"/clients/{created_id}/modifier",
-            data={"nom": "Mamadou D.", "telephone": "779999999", "adresse": "Thies"},
+            data={
+                "nom": "Mamadou D.",
+                "telephone": "779999999",
+                "adresse": "Thies",
+                "remarque": "Suivi hebdomadaire",
+            },
             follow_redirects=False,
         )
         self.assertEqual(edit_resp.status_code, 302)
@@ -107,6 +128,7 @@ class AppTests(unittest.TestCase):
             edited = db.session.get(ModelClient, created_id)
             self.assertEqual(edited.nom, "Mamadou D.")
             self.assertEqual(edited.telephone, "779999999")
+            self.assertEqual(edited.remarque, "Suivi hebdomadaire")
 
         delete_resp = self.client.post(f"/clients/{created_id}/supprimer", follow_redirects=False)
         self.assertEqual(delete_resp.status_code, 302)
@@ -165,8 +187,8 @@ class AppTests(unittest.TestCase):
             data={
                 "client_id": str(self.seed_client_id),
                 "service_id": str(self.seed_service_id),
-                "quantite": "2",
-                "montant_paye": "1000",
+                "quantite": "2,5",
+                "avance": "1000",
                 "date_transaction": date.today().isoformat(),
                 "notes": "Initial",
             },
@@ -177,7 +199,8 @@ class AppTests(unittest.TestCase):
         with self.app.app_context():
             tx = Transaction.query.order_by(Transaction.id.desc()).first()
             self.assertIsNotNone(tx)
-            self.assertAlmostEqual(tx.total, 3000.0)
+            self.assertAlmostEqual(tx.quantite, 2.5)
+            self.assertAlmostEqual(tx.total, 3750.0)
             self.assertAlmostEqual(tx.total_paye, 1000.0)
             self.assertEqual(Paiement.query.filter_by(transaction_id=tx.id).count(), 1)
             tx_id = tx.id
@@ -196,12 +219,66 @@ class AppTests(unittest.TestCase):
         with self.app.app_context():
             tx_after = db.session.get(Transaction, tx_id)
             self.assertAlmostEqual(tx_after.total_paye, 1500.0)
-            self.assertAlmostEqual(tx_after.solde_restant, 1500.0)
+            self.assertAlmostEqual(tx_after.solde_restant, 2250.0)
             self.assertEqual(Paiement.query.filter_by(transaction_id=tx_id).count(), 2)
 
         dashboard_resp = self.client.get("/")
         self.assertEqual(dashboard_resp.status_code, 200)
         self.assertIn(b"Tableau de bord", dashboard_resp.data)
+
+    def test_amount_fields_reject_decimals(self):
+        self.login()
+
+        invalid_create_resp = self.client.post(
+            "/transactions/nouvelle",
+            data={
+                "client_id": str(self.seed_client_id),
+                "service_id": str(self.seed_service_id),
+                "quantite": "1",
+                "avance": "1000,5",
+                "date_transaction": date.today().isoformat(),
+                "notes": "Invalid decimal avance",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(invalid_create_resp.status_code, 200)
+
+        with self.app.app_context():
+            self.assertEqual(Transaction.query.count(), 0)
+
+        valid_create_resp = self.client.post(
+            "/transactions/nouvelle",
+            data={
+                "client_id": str(self.seed_client_id),
+                "service_id": str(self.seed_service_id),
+                "quantite": "1",
+                "avance": "0",
+                "date_transaction": date.today().isoformat(),
+                "notes": "Valid transaction",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(valid_create_resp.status_code, 302)
+
+        with self.app.app_context():
+            tx = Transaction.query.order_by(Transaction.id.desc()).first()
+            tx_id = tx.id
+
+        invalid_payment_resp = self.client.post(
+            f"/transactions/{tx_id}/paiement",
+            data={
+                "montant": "200,5",
+                "date_paiement": date.today().isoformat(),
+                "notes": "Invalid decimal payment",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(invalid_payment_resp.status_code, 200)
+
+        with self.app.app_context():
+            tx_after = db.session.get(Transaction, tx_id)
+            self.assertAlmostEqual(tx_after.total_paye, 0.0)
+            self.assertEqual(Paiement.query.filter_by(transaction_id=tx_id).count(), 0)
 
 
 if __name__ == "__main__":

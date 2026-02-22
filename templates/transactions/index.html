@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Transactions{% endblock %}
 {% block page_title %}Transactions{% endblock %}
 
@@ -18,7 +18,6 @@
   </div>
 </div>
 
-<!-- Filtre -->
 <div class="mb-3 d-flex gap-2">
   <a href="{{ url_for('transactions.index', filtre='tous') }}"
      class="btn btn-sm {% if filtre == 'tous' %}btn-primary{% else %}btn-outline-primary{% endif %}">
@@ -56,17 +55,19 @@
                  class="text-decoration-none fw-semibold">{{ tx.client.nom }}</a>
             </td>
             <td>{{ tx.service.nom }}</td>
-            <td class="text-center">{{ tx.quantite }}</td>
+            <td class="text-center">{{ "{:g}".format(tx.quantite) }}</td>
             <td class="text-end">{{ "{:,.0f}".format(tx.total) }}</td>
-            <td class="text-end text-success">{{ "{:,.0f}".format(tx.montant_paye) }}</td>
+            <td class="text-end text-success">{{ "{:,.0f}".format(tx.total_paye) }}</td>
             <td class="text-end {% if tx.solde_restant > 0 %}text-danger{% endif %}">
               {{ "{:,.0f}".format(tx.solde_restant) }}
             </td>
             <td class="text-center">
               {% if tx.est_solde %}
               <span class="badge badge-solde">Soldé</span>
+              {% elif tx.total_paye <= 0 %}
+              <span class="badge badge-du">Paiement au retrait</span>
               {% else %}
-              <span class="badge badge-du">Dû</span>
+              <span class="badge badge-du">Solde au retrait</span>
               {% endif %}
             </td>
             <td class="text-center">
@@ -77,7 +78,7 @@
                 </a>
                 {% if not tx.est_solde %}
                 <a href="{{ url_for('transactions.paiement', tx_id=tx.id) }}"
-                   class="btn btn-outline-success" title="Encaisser">
+                   class="btn btn-outline-success" title="Encaisser / Retrait">
                   <i class="bi bi-cash"></i>
                 </a>
                 {% endif %}
@@ -102,19 +103,19 @@
   <ul class="pagination pagination-sm justify-content-center">
     {% if pagination.has_prev %}
     <li class="page-item">
-      <a class="page-link" href="{{ url_for('transactions.index', page=pagination.prev_num, filtre=filtre) }}">«</a>
+      <a class="page-link" href="{{ url_for('transactions.index', page=pagination.prev_num, filtre=filtre) }}">&laquo;</a>
     </li>
     {% endif %}
     {% for p in pagination.iter_pages() %}
     <li class="page-item {% if p == pagination.page %}active{% endif %}">
       {% if p %}
       <a class="page-link" href="{{ url_for('transactions.index', page=p, filtre=filtre) }}">{{ p }}</a>
-      {% else %}<span class="page-link">…</span>{% endif %}
+      {% else %}<span class="page-link">...</span>{% endif %}
     </li>
     {% endfor %}
     {% if pagination.has_next %}
     <li class="page-item">
-      <a class="page-link" href="{{ url_for('transactions.index', page=pagination.next_num, filtre=filtre) }}">»</a>
+      <a class="page-link" href="{{ url_for('transactions.index', page=pagination.next_num, filtre=filtre) }}">&raquo;</a>
     </li>
     {% endif %}
   </ul>

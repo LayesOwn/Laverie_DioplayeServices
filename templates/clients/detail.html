@@ -1,34 +1,35 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}{{ client.nom }}{% endblock %}
 {% block page_title %}Fiche client{% endblock %}
 
 {% block content %}
-<!-- En-tête fiche client -->
 <div class="row g-3 mb-4">
   <div class="col-lg-8">
     <div class="card border-0 shadow-sm">
       <div class="card-body">
         <div class="d-flex align-items-start justify-content-between">
           <div class="d-flex gap-3 align-items-center">
-            <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center
-                        justify-content-center" style="width:55px;height:55px">
+            <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width:55px;height:55px">
               <i class="bi bi-person-fill text-primary fs-3"></i>
             </div>
             <div>
               <h4 class="fw-bold mb-0">{{ client.nom }}</h4>
               <span class="text-muted small">
-                <i class="bi bi-telephone me-1"></i>{{ client.telephone or "—" }}
+                <i class="bi bi-telephone me-1"></i>{{ client.telephone or "-" }}
                 {% if client.adresse %}
                 &nbsp;·&nbsp;<i class="bi bi-geo-alt me-1"></i>{{ client.adresse }}
                 {% endif %}
               </span>
               <br>
               <small class="text-muted">Client depuis le {{ client.created_at.strftime("%d/%m/%Y") }}</small>
+              {% if client.remarque %}
+              <br>
+              <small class="text-warning-emphasis"><i class="bi bi-chat-left-text me-1"></i>{{ client.remarque }}</small>
+              {% endif %}
             </div>
           </div>
           <div>
-            <a href="{{ url_for('clients.edit', client_id=client.id) }}"
-               class="btn btn-outline-secondary btn-sm">
+            <a href="{{ url_for('clients.edit', client_id=client.id) }}" class="btn btn-outline-secondary btn-sm">
               <i class="bi bi-pencil me-1"></i>Modifier
             </a>
           </div>
@@ -36,6 +37,7 @@
       </div>
     </div>
   </div>
+
   <div class="col-lg-4">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body">
@@ -58,12 +60,19 @@
             <div class="tiny text-muted" style="font-size:.7rem">XOF</div>
           </div>
         </div>
+        <hr class="my-2">
+        <div class="text-center">
+          {% if client.solde_du > 0 %}
+          <span class="badge badge-du">État: Débiteur</span>
+          {% else %}
+          <span class="badge badge-solde">État: Soldé</span>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Historique transactions -->
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
     <span class="fw-semibold"><i class="bi bi-receipt text-primary me-1"></i>Historique transactions</span>
@@ -91,26 +100,26 @@
           <tr>
             <td>{{ tx.date_transaction.strftime("%d/%m/%Y") }}</td>
             <td>{{ tx.service.nom }}</td>
-            <td class="text-center">{{ tx.quantite }}</td>
+            <td class="text-center">{{ "{:g}".format(tx.quantite) }}</td>
             <td class="text-end">{{ "{:,.0f}".format(tx.total) }}</td>
-            <td class="text-end text-success">{{ "{:,.0f}".format(tx.montant_paye) }}</td>
+            <td class="text-end text-success">{{ "{:,.0f}".format(tx.total_paye) }}</td>
             <td class="text-end">{{ "{:,.0f}".format(tx.solde_restant) }}</td>
             <td class="text-center">
               {% if tx.est_solde %}
               <span class="badge badge-solde">Soldé</span>
+              {% elif tx.total_paye <= 0 %}
+              <span class="badge badge-du">Paiement au retrait</span>
               {% else %}
-              <span class="badge badge-du">Dû</span>
+              <span class="badge badge-du">Solde au retrait</span>
               {% endif %}
             </td>
             <td class="text-center">
               <div class="btn-group btn-group-sm">
-                <a href="{{ url_for('exports.recu_pdf', tx_id=tx.id) }}"
-                   class="btn btn-outline-primary" title="Reçu PDF" target="_blank">
+                <a href="{{ url_for('exports.recu_pdf', tx_id=tx.id) }}" class="btn btn-outline-primary" title="Reçu PDF" target="_blank">
                   <i class="bi bi-file-pdf"></i>
                 </a>
                 {% if not tx.est_solde %}
-                <a href="{{ url_for('transactions.paiement', tx_id=tx.id) }}"
-                   class="btn btn-outline-success" title="Encaisser">
+                <a href="{{ url_for('transactions.paiement', tx_id=tx.id) }}" class="btn btn-outline-success" title="Encaisser / Retrait">
                   <i class="bi bi-cash"></i>
                 </a>
                 {% endif %}
@@ -128,13 +137,12 @@
   </div>
 </div>
 
-<!-- Pagination -->
 {% if pagination.pages > 1 %}
 <nav class="mt-3">
   <ul class="pagination pagination-sm justify-content-center">
     {% if pagination.has_prev %}
     <li class="page-item">
-      <a class="page-link" href="{{ url_for('clients.detail', client_id=client.id, page=pagination.prev_num) }}">«</a>
+      <a class="page-link" href="{{ url_for('clients.detail', client_id=client.id, page=pagination.prev_num) }}">&laquo;</a>
     </li>
     {% endif %}
     {% for p in pagination.iter_pages() %}
@@ -142,13 +150,13 @@
       {% if p %}
       <a class="page-link" href="{{ url_for('clients.detail', client_id=client.id, page=p) }}">{{ p }}</a>
       {% else %}
-      <span class="page-link">…</span>
+      <span class="page-link">...</span>
       {% endif %}
     </li>
     {% endfor %}
     {% if pagination.has_next %}
     <li class="page-item">
-      <a class="page-link" href="{{ url_for('clients.detail', client_id=client.id, page=pagination.next_num) }}">»</a>
+      <a class="page-link" href="{{ url_for('clients.detail', client_id=client.id, page=pagination.next_num) }}">&raquo;</a>
     </li>
     {% endif %}
   </ul>

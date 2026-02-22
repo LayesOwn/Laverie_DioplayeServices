@@ -1,26 +1,75 @@
 ﻿"""
-Blueprint Transactions - Recettes clients avec gestion du crédit
+Blueprint Transactions - Recettes clients avec gestion du crédit.
 """
 from datetime import date
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
+
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import login_required
 from flask_wtf import FlaskForm
-from wtforms import SelectField, IntegerField, FloatField, DateField, StringField, SubmitField
-from wtforms.validators import DataRequired, Optional, NumberRange
-from extensions import db
-from models import Transaction, Client, Service, Paiement
+from wtforms import DateField, FloatField, IntegerField, SelectField, StringField, SubmitField
+from wtforms.validators import DataRequired, Length, NumberRange, Optional
+
 from config import Config
+from extensions import db
+from models import Client, Paiement, Service, Transaction
 
 transactions_bp = Blueprint("transactions", __name__)
 
 
+class DecimalFloatField(FloatField):
+    """FloatField qui accepte la virgule comme séparateur décimal."""
+
+    def process_formdata(self, valuelist):
+        if not valuelist:
+            return
+        raw_value = (valuelist[0] or "").strip().replace(" ", "").replace(",", ".")
+        if raw_value == "":
+            self.data = None
+            return
+        try:
+            self.data = float(raw_value)
+        except ValueError as exc:
+            self.data = None
+            raise ValueError("Nombre invalide.") from exc
+
+
+class StrictIntegerField(IntegerField):
+    """IntegerField strict: refuse les décimales, accepte les espaces."""
+
+    def process_formdata(self, valuelist):
+        if not valuelist:
+            return
+        raw_value = (valuelist[0] or "").strip().replace(" ", "")
+        if raw_value == "":
+            self.data = None
+            return
+        if "," in raw_value or "." in raw_value:
+            self.data = None
+            raise ValueError("Le montant doit être un entier.")
+        try:
+            self.data = int(raw_value)
+        except ValueError as exc:
+            self.data = None
+            raise ValueError("Nombre entier invalide.") from exc
+
+
 class TransactionForm(FlaskForm):
-    client_id = SelectField("Client", coerce=int, validators=[DataRequired()])
+    client_id = SelectField("Client existant", coerce=int, validators=[Optional()])
+
+    new_client_nom = StringField("Nouveau client - Nom complet", validators=[Optional(), Length(max=100)])
+    new_client_telephone = StringField("Nouveau client - Téléphone", validators=[Optional(), Length(max=20)])
+    new_client_adresse = StringField("Nouveau client - Adresse", validators=[Optional(), Length(max=200)])
+    new_client_remarque = StringField("Nouveau client - Remarque", validators=[Optional(), Length(max=300)])
+
     service_id = SelectField("Service", coerce=int, validators=[DataRequired()])
-    quantite = IntegerField("Quantité", default=1, validators=[DataRequired(), NumberRange(min=1)])
-    montant_paye = FloatField(
-        "Montant payé maintenant (XOF)",
-        default=0.0,
+    quantite = DecimalFloatField(
+        "Quantité",
+        default=1.0,
+        validators=[DataRequired(), NumberRange(min=0.01)],
+    )
+    avance = StrictIntegerField(
+        "Avance à la commande (XOF)",
+        default=0,
         validators=[Optional(), NumberRange(min=0)],
     )
     date_transaction = DateField("Date", default=date.today, validators=[DataRequired()])
@@ -29,17 +78,41 @@ class TransactionForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.client_id.choices = [(c.id, c.nom) for c in Client.query.order_by(Client.nom).all()]
+        self.client_id.choices = [(0, "-- Nouveau client --")] + [
+            (c.id, c.nom) for c in Client.query.order_by(Client.nom).all()
+        ]
         self.service_id.choices = [
             (s.id, f"{s.nom} - {s.prix_unitaire:,.0f} XOF")
             for s in Service.query.filter_by(actif=True).order_by(Service.nom).all()
         ]
 
+    def validate(self, extra_validators=None):
+        valid = super().validate(extra_validators=extra_validators)
+
+        has_existing_client = bool(self.client_id.data and self.client_id.data > 0)
+        has_new_client = bool((self.new_client_nom.data or "").strip())
+
+        if has_existing_client and has_new_client:
+            msg = "Choisissez un client existant OU saisissez un nouveau client."
+            self.client_id.errors.append(msg)
+            self.new_client_nom.errors.append(msg)
+            valid = False
+        elif not has_existing_client and not has_new_client:
+            msg = "Sélectionnez un client existant ou saisissez le nom du nouveau client."
+            self.client_id.errors.append(msg)
+            self.new_client_nom.errors.append(msg)
+            valid = False
+
+        return valid
+
 
 class PaiementForm(FlaskForm):
     """Formulaire pour enregistrer un paiement partiel/total sur une transaction."""
 
-    montant = FloatField("Montant reçu (XOF)", validators=[DataRequired(), NumberRange(min=1)])
+    montant = StrictIntegerField(
+        "Montant reçu (XOF)",
+        validators=[DataRequired(), NumberRange(min=1)],
+    )
     date_paiement = DateField("Date du paiement", default=date.today, validators=[DataRequired()])
     notes = StringField("Notes", validators=[Optional()])
     submit = SubmitField("Enregistrer le paiement")
@@ -70,13 +143,42 @@ def create():
     form = TransactionForm()
     if form.validate_on_submit():
         service = db.session.get(Service, form.service_id.data)
-        total = service.prix_unitaire * form.quantite.data
-        montant_paye = min(form.montant_paye.data or 0, total)
+        if not service:
+            flash("Service introuvable.", "danger")
+            return render_template("transactions/form.html", form=form, titre="Nouvelle transaction")
+
+        if form.quantite.data <= 0:
+            flash("La quantité doit être supérieure à 0.", "danger")
+            return render_template("transactions/form.html", form=form, titre="Nouvelle transaction")
+
+        client = None
+        created_new_client = False
+
+        if form.client_id.data and form.client_id.data > 0:
+            client = db.session.get(Client, form.client_id.data)
+            if not client:
+                flash("Client introuvable.", "danger")
+                return render_template("transactions/form.html", form=form, titre="Nouvelle transaction")
+        else:
+            client = Client(
+                nom=(form.new_client_nom.data or "").strip(),
+                telephone=(form.new_client_telephone.data or "").strip() or None,
+                adresse=(form.new_client_adresse.data or "").strip() or None,
+                remarque=(form.new_client_remarque.data or "").strip() or None,
+            )
+            db.session.add(client)
+            db.session.flush()
+            created_new_client = True
+
+        quantite = float(form.quantite.data)
+        total = int(round(float(service.prix_unitaire) * quantite))
+        avance = int(form.avance.data or 0)
+        avance = min(max(avance, 0), total)
 
         transaction = Transaction(
-            client_id=form.client_id.data,
+            client_id=client.id,
             service_id=form.service_id.data,
-            quantite=form.quantite.data,
+            quantite=quantite,
             total=total,
             montant_paye=0.0,
             date_transaction=form.date_transaction.data,
@@ -85,21 +187,37 @@ def create():
         db.session.add(transaction)
         db.session.flush()
 
-        if montant_paye > 0:
+        if avance > 0:
             transaction.enregistrer_paiement(
-                montant=montant_paye,
+                montant=avance,
                 date_paiement=form.date_transaction.data,
-                notes="Paiement initial",
+                notes="Avance à la commande",
             )
 
         db.session.commit()
 
+        if created_new_client:
+            flash(f"Nouveau client '{client.nom}' créé et lié à la transaction.", "info")
+
         flash(
             f"Transaction enregistrée - Total : {total:,.0f} XOF | "
-            f"Payé : {montant_paye:,.0f} XOF | "
+            f"Avance : {avance:,.0f} XOF | "
             f"Reste : {transaction.solde_restant:,.0f} XOF",
             "success",
         )
+
+        if avance <= 0:
+            flash("Aucune avance: paiement prévu au retrait.", "warning")
+        elif avance < total:
+            flash("Avance partielle enregistrée: solde à régler au retrait.", "info")
+
+        if client.solde_du > 0:
+            flash(
+                f"État client: débiteur ({client.solde_du:,.0f} XOF restant dû).",
+                "warning",
+            )
+        else:
+            flash("État client: soldé (aucun montant dû).", "success")
         return redirect(url_for("transactions.index"))
 
     return render_template("transactions/form.html", form=form, titre="Nouvelle transaction")
@@ -129,9 +247,7 @@ def paiement(tx_id: int):
         )
         return redirect(url_for("clients.detail", client_id=tx.client_id))
 
-    historique = (
-        tx.paiements.order_by(Paiement.date_paiement.desc(), Paiement.created_at.desc()).all()
-    )
+    historique = tx.paiements.order_by(Paiement.date_paiement.desc(), Paiement.created_at.desc()).all()
     return render_template("transactions/paiement.html", form=form, transaction=tx, historique=historique)
 
 

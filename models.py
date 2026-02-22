@@ -35,6 +35,7 @@ class Client(db.Model):
     nom = db.Column(db.String(100), nullable=False)
     telephone = db.Column(db.String(20), nullable=True)
     adresse = db.Column(db.String(200), nullable=True)
+    remarque = db.Column(db.String(300), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     transactions = db.relationship(
@@ -98,7 +99,7 @@ class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey("clients.id"), nullable=False)
     service_id = db.Column(db.Integer, db.ForeignKey("services.id"), nullable=False)
-    quantite = db.Column(db.Integer, nullable=False, default=1)
+    quantite = db.Column(db.Float, nullable=False, default=1.0)
     total = db.Column(db.Float, nullable=False)
     montant_paye = db.Column(db.Float, default=0.0)
     type_transaction = db.Column(db.String(20), default="recette")

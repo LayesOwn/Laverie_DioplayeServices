@@ -4,6 +4,7 @@ Pattern : Application Factory
 """
 import os
 from flask import Flask
+from sqlalchemy import inspect, text
 from config import config
 from extensions import db, login_manager, csrf, migrate
 
@@ -52,6 +53,7 @@ def create_app(config_name: str = None, test_config: dict | None = None) -> Flas
 
     with app.app_context():
         db.create_all()
+        _ensure_schema_compatibility()
         _seed_default_data()
         _backfill_legacy_payments()
 
@@ -119,6 +121,21 @@ def _backfill_legacy_payments():
 
     if changed:
         db.session.commit()
+
+
+def _ensure_schema_compatibility():
+    """
+    Applique les ajustements minimaux de schéma pour les DB existantes
+    quand aucune migration formelle n'a encore été jouée.
+    """
+    inspector = inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+
+    if "clients" in table_names:
+        client_columns = {col["name"] for col in inspector.get_columns("clients")}
+        if "remarque" not in client_columns:
+            with db.engine.begin() as conn:
+                conn.execute(text("ALTER TABLE clients ADD COLUMN remarque VARCHAR(300)"))
 
 
 if __name__ == "__main__":
