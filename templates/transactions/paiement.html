@@ -1,0 +1,123 @@
+﻿{% extends "base.html" %}
+{% block title %}Encaissement{% endblock %}
+{% block page_title %}Encaissement{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 fw-semibold py-3">
+        <i class="bi bi-cash-coin text-success me-2"></i>Enregistrer un paiement
+      </div>
+      <div class="card-body">
+
+        <div class="bg-light rounded p-3 mb-4">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted small">Client</span>
+            <span class="fw-semibold">{{ transaction.client.nom }}</span>
+          </div>
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted small">Service</span>
+            <span>{{ transaction.service.nom }}</span>
+          </div>
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted small">Total facturé</span>
+            <span class="fw-bold">{{ "{:,.0f}".format(transaction.total) }} XOF</span>
+          </div>
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted small">Déjà payé</span>
+            <span class="text-success fw-semibold">{{ "{:,.0f}".format(transaction.total_paye) }} XOF</span>
+          </div>
+          <hr class="my-2">
+          <div class="d-flex justify-content-between">
+            <span class="text-muted small fw-bold">Reste dû</span>
+            <span class="text-danger fw-bold fs-5">{{ "{:,.0f}".format(transaction.solde_restant) }} XOF</span>
+          </div>
+        </div>
+
+        <form method="POST">
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.montant.label(class="form-label fw-semibold small") }}
+            <div class="input-group">
+              {{ form.montant(class="form-control form-control-lg" + (" is-invalid" if form.montant.errors else ""),
+                              placeholder=("{:,.0f}".format(transaction.solde_restant)),
+                              max=transaction.solde_restant) }}
+              <span class="input-group-text">XOF</span>
+            </div>
+            <div class="form-text">Maximum : {{ "{:,.0f}".format(transaction.solde_restant) }} XOF</div>
+            {% for e in form.montant.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.date_paiement.label(class="form-label fw-semibold small") }}
+            {{ form.date_paiement(class="form-control" + (" is-invalid" if form.date_paiement.errors else "")) }}
+            {% for e in form.date_paiement.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-4">
+            {{ form.notes.label(class="form-label fw-semibold small") }}
+            {{ form.notes(class="form-control", placeholder="Référence, précision...") }}
+          </div>
+
+          <div class="mb-3">
+            <button type="button"
+                    id="payerSoldeBtn"
+                    class="btn btn-outline-success btn-sm"
+                    data-solde="{{ transaction.solde_restant }}">
+              <i class="bi bi-check-all me-1"></i>Payer le solde complet
+            </button>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success">
+              <i class="bi bi-cash me-1"></i> Enregistrer
+            </button>
+            <a href="{{ url_for('clients.detail', client_id=transaction.client_id) }}" class="btn btn-outline-secondary">Annuler</a>
+          </div>
+        </form>
+
+        {% if historique %}
+        <hr class="my-4">
+        <h6 class="fw-semibold mb-2">Historique des paiements</h6>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th class="text-end">Montant</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in historique %}
+              <tr>
+                <td>{{ p.date_paiement.strftime("%d/%m/%Y") }}</td>
+                <td class="text-end text-success fw-semibold">{{ "{:,.0f}".format(p.montant) }} XOF</td>
+                <td>{{ p.notes or "-" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const payerSoldeBtn = document.getElementById('payerSoldeBtn');
+if (payerSoldeBtn) {
+  payerSoldeBtn.addEventListener('click', () => {
+    const montantInput = document.querySelector('[name=montant]');
+    if (!montantInput) return;
+    montantInput.value = payerSoldeBtn.dataset.solde || '';
+    montantInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+</script>
+{% endblock %}

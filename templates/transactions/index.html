@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Transactions{% endblock %}
+{% block page_title %}Transactions{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-receipt text-primary me-2"></i>Transactions</h4>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('exports.transactions_csv') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-file-earmark-csv me-1"></i>CSV
+    </a>
+    <a href="{{ url_for('exports.transactions_excel') }}" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-file-earmark-excel me-1"></i>Excel
+    </a>
+    <a href="{{ url_for('transactions.create') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i> Nouvelle
+    </a>
+  </div>
+</div>
+
+<!-- Filtre -->
+<div class="mb-3 d-flex gap-2">
+  <a href="{{ url_for('transactions.index', filtre='tous') }}"
+     class="btn btn-sm {% if filtre == 'tous' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+    Toutes
+  </a>
+  <a href="{{ url_for('transactions.index', filtre='non_soldes') }}"
+     class="btn btn-sm {% if filtre == 'non_soldes' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+    <i class="bi bi-clock me-1"></i>Non soldées
+  </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Client</th>
+            <th>Service</th>
+            <th class="text-center">Qté</th>
+            <th class="text-end">Total</th>
+            <th class="text-end">Payé</th>
+            <th class="text-end">Reste</th>
+            <th class="text-center">Statut</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tx in transactions %}
+          <tr>
+            <td>{{ tx.date_transaction.strftime("%d/%m/%Y") }}</td>
+            <td>
+              <a href="{{ url_for('clients.detail', client_id=tx.client_id) }}"
+                 class="text-decoration-none fw-semibold">{{ tx.client.nom }}</a>
+            </td>
+            <td>{{ tx.service.nom }}</td>
+            <td class="text-center">{{ tx.quantite }}</td>
+            <td class="text-end">{{ "{:,.0f}".format(tx.total) }}</td>
+            <td class="text-end text-success">{{ "{:,.0f}".format(tx.montant_paye) }}</td>
+            <td class="text-end {% if tx.solde_restant > 0 %}text-danger{% endif %}">
+              {{ "{:,.0f}".format(tx.solde_restant) }}
+            </td>
+            <td class="text-center">
+              {% if tx.est_solde %}
+              <span class="badge badge-solde">Soldé</span>
+              {% else %}
+              <span class="badge badge-du">Dû</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <a href="{{ url_for('exports.recu_pdf', tx_id=tx.id) }}"
+                   class="btn btn-outline-primary" title="PDF" target="_blank">
+                  <i class="bi bi-file-pdf"></i>
+                </a>
+                {% if not tx.est_solde %}
+                <a href="{{ url_for('transactions.paiement', tx_id=tx.id) }}"
+                   class="btn btn-outline-success" title="Encaisser">
+                  <i class="bi bi-cash"></i>
+                </a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="text-center text-muted py-4">
+              <i class="bi bi-receipt fs-2 d-block mb-2"></i>Aucune transaction
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if pagination.pages > 1 %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if pagination.has_prev %}
+    <li class="page-item">
+      <a class="page-link" href="{{ url_for('transactions.index', page=pagination.prev_num, filtre=filtre) }}">«</a>
+    </li>
+    {% endif %}
+    {% for p in pagination.iter_pages() %}
+    <li class="page-item {% if p == pagination.page %}active{% endif %}">
+      {% if p %}
+      <a class="page-link" href="{{ url_for('transactions.index', page=p, filtre=filtre) }}">{{ p }}</a>
+      {% else %}<span class="page-link">…</span>{% endif %}
+    </li>
+    {% endfor %}
+    {% if pagination.has_next %}
+    <li class="page-item">
+      <a class="page-link" href="{{ url_for('transactions.index', page=pagination.next_num, filtre=filtre) }}">»</a>
+    </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

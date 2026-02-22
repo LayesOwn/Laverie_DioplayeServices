@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ titre }}{% endblock %}
+{% block page_title %}{{ titre }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 fw-semibold py-3">
+        <i class="bi bi-cash-stack text-danger me-2"></i>{{ titre }}
+      </div>
+      <div class="card-body">
+        <form method="POST">
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.libelle.label(class="form-label fw-semibold small") }}
+            {{ form.libelle(class="form-control" + (" is-invalid" if form.libelle.errors else ""),
+                            placeholder="Ex : Achat lessive Ariel…") }}
+            {% for e in form.libelle.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              {{ form.type_depense.label(class="form-label fw-semibold small") }}
+              {{ form.type_depense(class="form-select") }}
+            </div>
+            <div class="col-6">
+              {{ form.montant.label(class="form-label fw-semibold small") }}
+              <div class="input-group">
+                {{ form.montant(class="form-control" + (" is-invalid" if form.montant.errors else ""),
+                                placeholder="5000") }}
+                <span class="input-group-text">XOF</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            {{ form.categorie.label(class="form-label fw-semibold small") }}
+            {{ form.categorie(class="form-select") }}
+          </div>
+
+          <div class="mb-3">
+            {{ form.date_depense.label(class="form-label fw-semibold small") }}
+            {{ form.date_depense(class="form-control") }}
+          </div>
+
+          <div class="mb-4">
+            {{ form.notes.label(class="form-label fw-semibold small") }}
+            {{ form.notes(class="form-control", placeholder="Notes optionnelles…") }}
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger">
+              <i class="bi bi-check-lg me-1"></i> Enregistrer
+            </button>
+            <a href="{{ url_for('depenses.index') }}" class="btn btn-outline-secondary">Annuler</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

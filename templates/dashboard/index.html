@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Tableau de bord{% endblock %}
+{% block page_title %}Tableau de bord{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="mb-0 fw-bold">Vue d'ensemble</h4>
+    <small class="text-muted">{{ aujourd_hui.strftime("%A %d %B %Y") }}</small>
+  </div>
+  <a href="{{ url_for('transactions.create') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i> Nouvelle transaction
+  </a>
+</div>
+
+<!-- ── KPIs Aujourd'hui ──────────────────────────── -->
+<h6 class="text-uppercase text-muted small fw-bold mb-2">Aujourd'hui</h6>
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="kpi-card bg-success text-white">
+      <div class="kpi-label">Recettes</div>
+      <div class="kpi-val">{{ "{:,.0f}".format(recette_jour) }}</div>
+      <small>XOF</small>
+      <i class="bi bi-arrow-up-circle kpi-icon"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="kpi-card bg-danger text-white">
+      <div class="kpi-label">Dépenses</div>
+      <div class="kpi-val">{{ "{:,.0f}".format(depense_jour) }}</div>
+      <small>XOF</small>
+      <i class="bi bi-arrow-down-circle kpi-icon"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="kpi-card {% if benefice_jour >= 0 %}bg-primary{% else %}bg-warning{% endif %} text-white">
+      <div class="kpi-label">Bénéfice</div>
+      <div class="kpi-val">{{ "{:,.0f}".format(benefice_jour) }}</div>
+      <small>XOF</small>
+      <i class="bi bi-graph-up kpi-icon"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="kpi-card bg-warning text-dark">
+      <div class="kpi-label">Créances</div>
+      <div class="kpi-val">{{ "{:,.0f}".format(montant_creances) }}</div>
+      <small>XOF — {{ nb_non_soldes }} tx</small>
+      <i class="bi bi-clock-history kpi-icon"></i>
+    </div>
+  </div>
+</div>
+
+<!-- ── KPIs Mois ─────────────────────────────────── -->
+<h6 class="text-uppercase text-muted small fw-bold mb-2">Ce mois</h6>
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle bg-success bg-opacity-10 p-2">
+            <i class="bi bi-currency-dollar text-success fs-4"></i>
+          </div>
+          <div>
+            <div class="small text-muted">Recettes mensuelles</div>
+            <div class="fw-bold fs-5">{{ "{:,.0f}".format(recette_mois) }} XOF</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle bg-danger bg-opacity-10 p-2">
+            <i class="bi bi-wallet2 text-danger fs-4"></i>
+          </div>
+          <div>
+            <div class="small text-muted">Dépenses mensuelles</div>
+            <div class="fw-bold fs-5">{{ "{:,.0f}".format(depense_mois) }} XOF</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle bg-primary bg-opacity-10 p-2">
+            <i class="bi bi-graph-up-arrow text-primary fs-4"></i>
+          </div>
+          <div>
+            <div class="small text-muted">Bénéfice mensuel</div>
+            <div class="fw-bold fs-5 {% if benefice_mois < 0 %}text-danger{% else %}text-success{% endif %}">
+              {{ "{:,.0f}".format(benefice_mois) }} XOF
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Graphiques ────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="bi bi-bar-chart-fill text-primary me-1"></i> Évolution mensuelle (12 mois)
+      </div>
+      <div class="card-body">
+        <div id="graph-mensuel" style="height:280px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="bi bi-pie-chart-fill text-primary me-1"></i> Répartition services
+      </div>
+      <div class="card-body">
+        <div id="graph-services" style="height:280px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Top clients + services ────────────────────── -->
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="bi bi-trophy-fill text-warning me-1"></i> Top 5 clients
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>#</th><th>Client</th><th class="text-end">Recettes</th></tr></thead>
+          <tbody>
+            {% for nom, total in top_clients %}
+            <tr>
+              <td><span class="badge bg-primary rounded-pill">{{ loop.index }}</span></td>
+              <td>{{ nom }}</td>
+              <td class="text-end fw-semibold text-success">{{ "{:,.0f}".format(total) }} XOF</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted py-3">Aucune donnée</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="bi bi-star-fill text-warning me-1"></i> Services populaires
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>#</th><th>Service</th><th class="text-end">Utilisations</th></tr></thead>
+          <tbody>
+            {% for nom, nb in top_services %}
+            <tr>
+              <td><span class="badge bg-success rounded-pill">{{ loop.index }}</span></td>
+              <td>{{ nom }}</td>
+              <td class="text-end fw-semibold">{{ nb }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted py-3">Aucune donnée</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script id="graph-mensuel-data" type="application/json">{{ graph_mensuel | safe }}</script>
+<script id="graph-services-data" type="application/json">{{ graph_services | safe }}</script>
+<script>
+  const graphMensuel = JSON.parse(
+    document.getElementById('graph-mensuel-data').textContent || '{"data":[],"layout":{}}'
+  );
+  const graphServices = JSON.parse(
+    document.getElementById('graph-services-data').textContent || '{"data":[],"layout":{}}'
+  );
+
+  Plotly.newPlot('graph-mensuel', graphMensuel.data, graphMensuel.layout, {responsive: true, displayModeBar: false});
+  Plotly.newPlot('graph-services', graphServices.data, graphServices.layout, {responsive: true, displayModeBar: false});
+</script>
+{% endblock %}
