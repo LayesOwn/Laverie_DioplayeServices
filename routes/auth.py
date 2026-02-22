@@ -7,7 +7,9 @@ from flask_login import login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField
 from wtforms.validators import DataRequired, Length
+from extensions import db
 from models import User
+from routes import require_admin
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -26,6 +28,13 @@ class LoginForm(FlaskForm):
     password = PasswordField("Mot de passe", validators=[DataRequired()])
     remember_me = BooleanField("Se souvenir de moi")
     submit = SubmitField("Connexion")
+
+
+class InviteUserForm(FlaskForm):
+    username = StringField("Nom d'utilisateur", validators=[DataRequired(), Length(1, 64)])
+    email = StringField("Email", validators=[DataRequired(), Length(max=120)])
+    password = PasswordField("Mot de passe", validators=[DataRequired(), Length(min=6, max=128)])
+    submit = SubmitField("Créer le compte invité")
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -47,6 +56,35 @@ def login():
         flash("Identifiants incorrects.", "danger")
 
     return render_template("auth/login.html", form=form)
+
+
+@auth_bp.route("/invite/nouveau", methods=["GET", "POST"])
+@login_required
+@require_admin
+def create_invite():
+    form = InviteUserForm()
+    if form.validate_on_submit():
+        username = form.username.data.strip()
+        email = form.email.data.strip().lower()
+        if "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+            flash("Email invalide.", "danger")
+            return render_template("auth/invite_form.html", form=form)
+
+        existing = User.query.filter(
+            (User.username == username) | (User.email == email)
+        ).first()
+        if existing:
+            flash("Nom d'utilisateur ou email déjà utilisé.", "danger")
+            return render_template("auth/invite_form.html", form=form)
+
+        invite = User(username=username, email=email, role="invite")
+        invite.set_password(form.password.data)
+        db.session.add(invite)
+        db.session.commit()
+        flash(f"Compte invité '{invite.username}' créé.", "success")
+        return redirect(url_for("dashboard.index"))
+
+    return render_template("auth/invite_form.html", form=form)
 
 
 @auth_bp.route("/logout")

@@ -25,6 +25,15 @@ class Config:
     # Nom de la laverie
     LAVERIE_NOM = "Dioplaye Services"
     LAVERIE_DEVISE = "XOF"
+    LAVERIE_TELEPHONE = "70.7301346"
+
+    # Comptes par défaut
+    ADMIN_DEFAULT_USERNAME = os.environ.get("ADMIN_DEFAULT_USERNAME", "Abdoulaye Diop")
+    ADMIN_DEFAULT_EMAIL = os.environ.get("ADMIN_DEFAULT_EMAIL", "abdoulaye.diop@dioplaye.sn")
+    ADMIN_DEFAULT_PASSWORD = os.environ.get("ADMIN_DEFAULT_PASSWORD", "admin123")
+    INVITE_DEFAULT_USERNAME = os.environ.get("INVITE_DEFAULT_USERNAME", "invite")
+    INVITE_DEFAULT_EMAIL = os.environ.get("INVITE_DEFAULT_EMAIL", "invite@dioplaye.sn")
+    INVITE_DEFAULT_PASSWORD = os.environ.get("INVITE_DEFAULT_PASSWORD", "invite123")
 
 
 class DevelopmentConfig(Config):

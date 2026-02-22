@@ -1,16 +1,16 @@
-# DIOLAVERIE — Dioplaye Services
-Application web de gestion de laverie — Flask / Python 3.11+
+﻿# DIOLAVERIE â€” Dioplaye Services
+Application web de gestion de laverie â€” Flask / Python 3.11+
 
 ---
 
-## 🚀 Installation locale
+## ðŸš€ Installation locale
 
-### 1. Cloner / télécharger le projet
+### 1. Cloner / tÃ©lÃ©charger le projet
 ```bash
 cd diolaverie
 ```
 
-### 2. Créer l'environnement virtuel
+### 2. CrÃ©er l'environnement virtuel
 ```bash
 python -m venv venv
 
@@ -21,7 +21,7 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-### 3. Installer les dépendances
+### 3. Installer les dÃ©pendances
 ```bash
 pip install -r requirements.txt
 ```
@@ -29,7 +29,7 @@ pip install -r requirements.txt
 ### 4. Configurer l'environnement
 ```bash
 cp .env.example .env
-# Éditez .env et changez la SECRET_KEY
+# Ã‰ditez .env et changez la SECRET_KEY
 ```
 
 ### 5. Lancer l'application
@@ -42,45 +42,50 @@ Ouvrir dans le navigateur : **http://localhost:5000**
 ---
 
 ## 🔐 Connexion par défaut
-- **Utilisateur** : `admin`
-- **Mot de passe** : `admin123`
+- **Admin (tous droits)** : `Abdoulaye Diop` / `admin123`
+- **Invité (opérationnel limité)** : `invite` / `invite123`
 
-⚠️ **Changez le mot de passe immédiatement** en production !
+Droits invité :
+- peut ajouter/enregistrer clients, transactions et paiements
+- ne peut pas supprimer un client
+- ne peut pas modifier la structure des services (créer/modifier/supprimer un service)
+
+âš ï¸ **Changez le mot de passe immÃ©diatement** en production !
 
 ---
 
-## 📁 Structure du projet
+## ðŸ“ Structure du projet
 ```
 diolaverie/
-├── app.py              # Factory Flask
-├── config.py           # Configurations dev/prod
-├── extensions.py       # Extensions (db, login, csrf…)
-├── models.py           # Modèles SQLAlchemy
-├── wsgi.py             # Point d'entrée Gunicorn
-├── routes/
-│   ├── auth.py         # Login / Logout
-│   ├── clients.py      # CRUD clients
-│   ├── services.py     # CRUD services
-│   ├── transactions.py # Recettes + paiements
-│   ├── depenses.py     # Dépenses internes
-│   ├── dashboard.py    # KPIs + graphiques
-│   └── exports.py      # CSV / Excel / PDF
-├── templates/          # Templates HTML Jinja2
-├── static/             # CSS / JS / images
-└── instance/
-    └── database.db     # Base SQLite (auto-créée)
+â”œâ”€â”€ app.py              # Factory Flask
+â”œâ”€â”€ config.py           # Configurations dev/prod
+â”œâ”€â”€ extensions.py       # Extensions (db, login, csrfâ€¦)
+â”œâ”€â”€ models.py           # ModÃ¨les SQLAlchemy
+â”œâ”€â”€ wsgi.py             # Point d'entrÃ©e Gunicorn
+â”œâ”€â”€ routes/
+â”‚   â”œâ”€â”€ auth.py         # Login / Logout
+â”‚   â”œâ”€â”€ clients.py      # CRUD clients
+â”‚   â”œâ”€â”€ services.py     # CRUD services
+â”‚   â”œâ”€â”€ transactions.py # Recettes + paiements
+â”‚   â”œâ”€â”€ depenses.py     # DÃ©penses internes
+â”‚   â”œâ”€â”€ dashboard.py    # KPIs + graphiques
+â”‚   â””â”€â”€ exports.py      # CSV / Excel / PDF
+â”œâ”€â”€ templates/          # Templates HTML Jinja2
+â”œâ”€â”€ static/             # CSS / JS / images
+â””â”€â”€ instance/
+    â””â”€â”€ database.db     # Base SQLite (auto-crÃ©Ã©e)
 ```
 
 ---
 
-## 🌍 Déploiement production (Gunicorn)
+## ðŸŒ DÃ©ploiement production (Gunicorn)
 
 ### Avec Gunicorn directement
 ```bash
 gunicorn wsgi:app --bind 0.0.0.0:8000 --workers 2
 ```
 
-### Avec Nginx (recommandé)
+### Avec Nginx (recommandÃ©)
 Fichier `/etc/nginx/sites-available/diolaverie` :
 ```nginx
 server {
@@ -95,7 +100,7 @@ server {
 }
 ```
 
-### Démarrage automatique avec systemd
+### DÃ©marrage automatique avec systemd
 Fichier `/etc/systemd/system/diolaverie.service` :
 ```ini
 [Unit]
@@ -119,22 +124,23 @@ sudo systemctl start diolaverie
 
 ---
 
-## 📊 Fonctionnalités
-- ✅ Authentification sécurisée (CSRF + sessions)
-- ✅ Gestion clients (CRUD + solde dû)
-- ✅ Gestion services (3 par défaut)
-- ✅ Transactions avec crédit (paiement différé)
-- ✅ Dépenses internes (par catégorie)
-- ✅ Dashboard avec graphiques Plotly
-- ✅ Export CSV, Excel, PDF reçu
-- ✅ Interface responsive mobile (Bootstrap 5)
-- ✅ Pagination sur toutes les listes
+## ðŸ“Š FonctionnalitÃ©s
+- âœ… Authentification sÃ©curisÃ©e (CSRF + sessions)
+- âœ… Gestion clients (CRUD + solde dÃ»)
+- âœ… Gestion services (3 par dÃ©faut)
+- âœ… Transactions avec crÃ©dit (paiement diffÃ©rÃ©)
+- âœ… DÃ©penses internes (par catÃ©gorie)
+- âœ… Dashboard avec graphiques Plotly
+- âœ… Export CSV, Excel, PDF reÃ§u
+- âœ… Interface responsive mobile (Bootstrap 5)
+- âœ… Pagination sur toutes les listes
 
 ---
 
-## 🔧 Variables d'environnement
-| Variable | Description | Défaut |
+## ðŸ”§ Variables d'environnement
+| Variable | Description | DÃ©faut |
 |---|---|---|
 | `FLASK_ENV` | `development` ou `production` | `development` |
-| `SECRET_KEY` | Clé secrète Flask | auto |
-| `DATABASE_URL` | URL base de données | SQLite local |
+| `SECRET_KEY` | ClÃ© secrÃ¨te Flask | auto |
+| `DATABASE_URL` | URL base de donnÃ©es | SQLite local |
+

@@ -5,9 +5,13 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h4 class="fw-bold mb-0"><i class="bi bi-grid-fill text-primary me-2"></i>Services</h4>
+  {% if current_user.is_admin %}
   <a href="{{ url_for('services.create') }}" class="btn btn-primary btn-sm">
     <i class="bi bi-plus-lg me-1"></i> Nouveau service
   </a>
+  {% else %}
+  <span class="badge bg-secondary-subtle text-secondary">Modification réservée à l'admin</span>
+  {% endif %}
 </div>
 
 <div class="row g-3">
@@ -31,6 +35,7 @@
         <small class="text-muted">{{ service.transactions.count() }} transaction(s)</small>
       </div>
       <div class="card-footer bg-transparent border-0 pt-0">
+        {% if current_user.is_admin %}
         <div class="btn-group btn-group-sm w-100">
           <a href="{{ url_for('services.edit', service_id=service.id) }}"
              class="btn btn-outline-secondary">
@@ -44,6 +49,9 @@
           </button>
           {% endif %}
         </div>
+        {% else %}
+        <div class="small text-muted">Consultation uniquement</div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -54,6 +62,7 @@
   {% endfor %}
 </div>
 
+{% if current_user.is_admin %}
 <form id="deleteForm" method="POST">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
@@ -71,9 +80,11 @@
     </div>
   </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
+{% if current_user.is_admin %}
 <script>
 function confirmerSuppression(id, nom) {
   document.getElementById('deleteNom').textContent = nom;
@@ -91,4 +102,5 @@ document.querySelectorAll('.js-delete-service').forEach((btn) => {
   });
 });
 </script>
+{% endif %}
 {% endblock %}

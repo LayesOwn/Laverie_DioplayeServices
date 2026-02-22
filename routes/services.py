@@ -8,6 +8,7 @@ from wtforms import StringField, FloatField, BooleanField, SubmitField
 from wtforms.validators import DataRequired, Length, Optional, NumberRange
 from extensions import db
 from models import Service
+from routes import require_admin
 
 services_bp = Blueprint("services", __name__)
 
@@ -33,6 +34,7 @@ def index():
 # ── Création ──────────────────────────────────────
 @services_bp.route("/nouveau", methods=["GET", "POST"])
 @login_required
+@require_admin
 def create():
     form = ServiceForm()
     if form.validate_on_submit():
@@ -52,6 +54,7 @@ def create():
 # ── Modification ──────────────────────────────────
 @services_bp.route("/<int:service_id>/modifier", methods=["GET", "POST"])
 @login_required
+@require_admin
 def edit(service_id: int):
     service = db.get_or_404(Service, service_id)
     form = ServiceForm(obj=service)
@@ -69,6 +72,7 @@ def edit(service_id: int):
 # ── Suppression ───────────────────────────────────
 @services_bp.route("/<int:service_id>/supprimer", methods=["POST"])
 @login_required
+@require_admin
 def delete(service_id: int):
     service = db.get_or_404(Service, service_id)
     # Vérifier si des transactions existent

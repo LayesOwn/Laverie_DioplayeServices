@@ -8,7 +8,14 @@ from flask import Blueprint, render_template
 from flask_login import login_required
 from sqlalchemy import func
 from extensions import db
-from models import Transaction, DepenseInterne, Client, Service, Paiement
+from models import (
+    Transaction,
+    DepenseInterne,
+    Client,
+    Service,
+    Paiement,
+    RecetteJournaliereHistorique,
+)
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -78,6 +85,8 @@ def index():
 
     graph_mensuel = _graph_evolution_mensuelle(aujourd_hui)
     graph_services = _graph_services(top_services)
+    graph_historique_mensuel = _graph_historique_mensuel_par_annee()
+    graph_historique_annuel = _graph_historique_total_annuel()
 
     return render_template(
         "dashboard/index.html",
@@ -96,6 +105,8 @@ def index():
         top_services=top_services,
         graph_mensuel=graph_mensuel,
         graph_services=graph_services,
+        graph_historique_mensuel=graph_historique_mensuel,
+        graph_historique_annuel=graph_historique_annuel,
         aujourd_hui=aujourd_hui,
     )
 
@@ -180,3 +191,91 @@ def _graph_services(top_services) -> str:
         },
     }
     return json.dumps(fig_data)
+
+
+def _graph_historique_mensuel_par_annee() -> str:
+    rows = db.session.query(
+        func.strftime("%Y", RecetteJournaliereHistorique.date_recette).label("annee"),
+        func.strftime("%m", RecetteJournaliereHistorique.date_recette).label("mois"),
+        func.coalesce(func.sum(RecetteJournaliereHistorique.montant), 0).label("total"),
+    ).group_by(
+        "annee",
+        "mois",
+    ).order_by(
+        "annee",
+        "mois",
+    ).all()
+
+    if not rows:
+        return json.dumps({"data": [], "layout": {}})
+
+    mois_labels = ["Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jul", "Aou", "Sep", "Oct", "Nov", "Dec"]
+    monthly_by_year = {}
+    for row in rows:
+        year = str(row.annee)
+        month_index = max(1, min(12, int(row.mois))) - 1
+        monthly_by_year.setdefault(year, [0] * 12)
+        monthly_by_year[year][month_index] = float(row.total or 0)
+
+    palette = ["#0d6efd", "#198754", "#fd7e14", "#dc3545", "#20c997", "#6f42c1", "#0dcaf0", "#ffc107"]
+    data = []
+    for idx, year in enumerate(sorted(monthly_by_year.keys())):
+        data.append(
+            {
+                "type": "scatter",
+                "mode": "lines+markers",
+                "name": year,
+                "x": mois_labels,
+                "y": monthly_by_year[year],
+                "line": {"width": 2, "color": palette[idx % len(palette)]},
+            }
+        )
+
+    return json.dumps(
+        {
+            "data": data,
+            "layout": {
+                "plot_bgcolor": "rgba(0,0,0,0)",
+                "paper_bgcolor": "rgba(0,0,0,0)",
+                "margin": {"l": 40, "r": 20, "t": 20, "b": 40},
+                "legend": {"orientation": "h", "y": -0.2},
+                "yaxis": {"tickformat": ",.0f", "ticksuffix": " XOF"},
+            },
+        }
+    )
+
+
+def _graph_historique_total_annuel() -> str:
+    rows = db.session.query(
+        func.strftime("%Y", RecetteJournaliereHistorique.date_recette).label("annee"),
+        func.coalesce(func.sum(RecetteJournaliereHistorique.montant), 0).label("total"),
+    ).group_by(
+        "annee",
+    ).order_by(
+        "annee",
+    ).all()
+
+    if not rows:
+        return json.dumps({"data": [], "layout": {}})
+
+    labels = [str(r.annee) for r in rows]
+    values = [float(r.total or 0) for r in rows]
+
+    return json.dumps(
+        {
+            "data": [
+                {
+                    "type": "bar",
+                    "x": labels,
+                    "y": values,
+                    "marker": {"color": "#0d6efd"},
+                }
+            ],
+            "layout": {
+                "plot_bgcolor": "rgba(0,0,0,0)",
+                "paper_bgcolor": "rgba(0,0,0,0)",
+                "margin": {"l": 40, "r": 20, "t": 20, "b": 40},
+                "yaxis": {"tickformat": ",.0f", "ticksuffix": " XOF"},
+            },
+        }
+    )

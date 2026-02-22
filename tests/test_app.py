@@ -4,7 +4,14 @@ from pathlib import Path
 
 from app import create_app
 from extensions import db
-from models import User, Client as ModelClient, Service, Transaction, Paiement
+from models import (
+    User,
+    Client as ModelClient,
+    Service,
+    Transaction,
+    Paiement,
+    RecetteJournaliereHistorique,
+)
 
 
 class AppTests(unittest.TestCase):
@@ -44,9 +51,12 @@ class AppTests(unittest.TestCase):
             db.drop_all()
             db.create_all()
 
-            admin = User(username="admin", email="admin@test.local")
+            admin = User(username="admin", email="admin@test.local", role="admin")
             admin.set_password("admin123")
             db.session.add(admin)
+            invite = User(username="invite", email="invite@test.local", role="invite")
+            invite.set_password("invite123")
+            db.session.add(invite)
 
             seed_client = ModelClient(nom="Client Seed", telephone="770000000")
             seed_service = Service(nom="Service Seed", prix_unitaire=1500, description="Seed", actif=True)
@@ -279,6 +289,87 @@ class AppTests(unittest.TestCase):
             tx_after = db.session.get(Transaction, tx_id)
             self.assertAlmostEqual(tx_after.total_paye, 0.0)
             self.assertEqual(Paiement.query.filter_by(transaction_id=tx_id).count(), 0)
+
+    def test_invite_permissions(self):
+        self.login(username="invite", password="invite123")
+
+        tx_page = self.client.get("/transactions/nouvelle", follow_redirects=False)
+        self.assertEqual(tx_page.status_code, 200)
+
+        invite_create_page = self.client.get("/auth/invite/nouveau", follow_redirects=False)
+        self.assertEqual(invite_create_page.status_code, 302)
+        self.assertEqual(invite_create_page.headers.get("Location"), "/")
+
+        historique_page = self.client.get("/recettes-historiques/", follow_redirects=False)
+        self.assertEqual(historique_page.status_code, 302)
+        self.assertEqual(historique_page.headers.get("Location"), "/")
+
+        service_create = self.client.post(
+            "/services/nouveau",
+            data={
+                "nom": "Service interdit",
+                "prix_unitaire": "1500",
+                "description": "Test",
+                "actif": "y",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(service_create.status_code, 302)
+        self.assertEqual(service_create.headers.get("Location"), "/")
+
+        client_delete = self.client.post(
+            f"/clients/{self.seed_client_id}/supprimer",
+            follow_redirects=False,
+        )
+        self.assertEqual(client_delete.status_code, 302)
+        self.assertEqual(client_delete.headers.get("Location"), "/")
+
+        with self.app.app_context():
+            self.assertIsNotNone(db.session.get(ModelClient, self.seed_client_id))
+
+    def test_admin_can_create_invite_account(self):
+        self.login()
+
+        resp = self.client.post(
+            "/auth/invite/nouveau",
+            data={
+                "username": "invite_soir",
+                "email": "invite_soir@test.local",
+                "password": "invite789",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.headers.get("Location"), "/")
+
+        with self.app.app_context():
+            created = User.query.filter_by(username="invite_soir").first()
+            self.assertIsNotNone(created)
+            self.assertEqual(created.role, "invite")
+
+    def test_admin_can_add_historical_daily_revenue(self):
+        self.login()
+
+        add_resp = self.client.post(
+            "/recettes-historiques/ajouter",
+            data={
+                "date_recette": "2024-01-01",
+                "montant": "85000",
+                "notes": "Import manuel",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(add_resp.status_code, 302)
+        self.assertEqual(add_resp.headers.get("Location"), "/recettes-historiques/")
+
+        with self.app.app_context():
+            record = RecetteJournaliereHistorique.query.filter_by(date_recette=date(2024, 1, 1)).first()
+            self.assertIsNotNone(record)
+            self.assertEqual(record.montant, 85000)
+
+        dashboard_resp = self.client.get("/")
+        self.assertEqual(dashboard_resp.status_code, 200)
+        self.assertIn(b"Comparaison mensuelle (saisie historique)", dashboard_resp.data)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Créer Un Invité{% endblock %}
+{% block page_title %}Créer Un Invité{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 fw-semibold py-3">
+        <i class="bi bi-person-plus text-primary me-2"></i>Nouveau compte invité
+      </div>
+      <div class="card-body">
+        <form method="POST">
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.username.label(class="form-label fw-semibold small") }}
+            {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else ""), placeholder="Ex: invite_matin") }}
+            {% for e in form.username.errors %}
+            <div class="invalid-feedback d-block">{{ e }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.email.label(class="form-label fw-semibold small") }}
+            {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), placeholder="invite@dioplaye.sn") }}
+            {% for e in form.email.errors %}
+            <div class="invalid-feedback d-block">{{ e }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-4">
+            {{ form.password.label(class="form-label fw-semibold small") }}
+            {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), placeholder="Min 6 caractères") }}
+            {% for e in form.password.errors %}
+            <div class="invalid-feedback d-block">{{ e }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>Créer l'invité
+            </button>
+            <a href="{{ url_for('dashboard.index') }}" class="btn btn-outline-secondary">Annuler</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

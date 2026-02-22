@@ -10,6 +10,7 @@ from wtforms.validators import DataRequired, Length, Optional
 from config import Config
 from extensions import db
 from models import Client, Transaction
+from routes import require_admin
 
 clients_bp = Blueprint("clients", __name__)
 
@@ -68,6 +69,7 @@ def edit(client_id: int):
 
 @clients_bp.route("/<int:client_id>/supprimer", methods=["POST"])
 @login_required
+@require_admin
 def delete(client_id: int):
     client = db.get_or_404(Client, client_id)
     nom = client.nom

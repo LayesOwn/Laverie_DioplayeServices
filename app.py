@@ -3,7 +3,7 @@ DIOLAVERIE - Point d'entrée de l'application Flask
 Pattern : Application Factory
 """
 import os
-from flask import Flask
+from flask import Flask, current_app
 from sqlalchemy import inspect, text
 from config import config
 from extensions import db, login_manager, csrf, migrate
@@ -41,6 +41,7 @@ def create_app(config_name: str = None, test_config: dict | None = None) -> Flas
     from routes.transactions import transactions_bp
     from routes.dashboard import dashboard_bp
     from routes.depenses import depenses_bp
+    from routes.recettes_historiques import recettes_historiques_bp
     from routes.exports import exports_bp
 
     app.register_blueprint(auth_bp)
@@ -49,6 +50,7 @@ def create_app(config_name: str = None, test_config: dict | None = None) -> Flas
     app.register_blueprint(transactions_bp, url_prefix="/transactions")
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(depenses_bp, url_prefix="/depenses")
+    app.register_blueprint(recettes_historiques_bp, url_prefix="/recettes-historiques")
     app.register_blueprint(exports_bp, url_prefix="/exports")
 
     with app.app_context():
@@ -64,12 +66,47 @@ def _seed_default_data():
     """Insère les données par défaut si la DB est vide."""
     from models import User, Service
 
-    if not User.query.first():
-        admin = User(username="admin", email="admin@diolaverie.sn")
-        admin.set_password("admin123")  # A changer en production
+    admin_username = current_app.config["ADMIN_DEFAULT_USERNAME"]
+    admin_email = current_app.config["ADMIN_DEFAULT_EMAIL"]
+    admin_password = current_app.config["ADMIN_DEFAULT_PASSWORD"]
+    invite_username = current_app.config["INVITE_DEFAULT_USERNAME"]
+    invite_email = current_app.config["INVITE_DEFAULT_EMAIL"]
+    invite_password = current_app.config["INVITE_DEFAULT_PASSWORD"]
+
+    admin = User.query.filter_by(role="admin").first()
+    if not admin:
+        admin = User.query.filter_by(username="admin").first()
+
+    if not admin:
+        admin = User(username=admin_username, email=admin_email, role="admin")
+        admin.set_password(admin_password)
         db.session.add(admin)
         db.session.commit()
-        print("Utilisateur admin créé. Mot de passe par défaut configuré.")
+        print(f"Administrateur général créé: {admin_username}")
+    else:
+        changed_admin = False
+        if admin.role != "admin":
+            admin.role = "admin"
+            changed_admin = True
+        if admin.username == "admin" and not User.query.filter_by(username=admin_username).first():
+            admin.username = admin_username
+            changed_admin = True
+        if admin.email == "admin@diolaverie.sn" and not User.query.filter_by(email=admin_email).first():
+            admin.email = admin_email
+            changed_admin = True
+        if changed_admin:
+            db.session.commit()
+            print(f"Compte admin mis à jour: {admin_username}")
+
+    invite_exists = User.query.filter(
+        (User.username == invite_username) | (User.email == invite_email)
+    ).first()
+    if not invite_exists:
+        invite = User(username=invite_username, email=invite_email, role="invite")
+        invite.set_password(invite_password)
+        db.session.add(invite)
+        db.session.commit()
+        print(f"Compte invité créé: {invite_username}")
 
     if not Service.query.first():
         services_defaut = [
@@ -136,6 +173,15 @@ def _ensure_schema_compatibility():
         if "remarque" not in client_columns:
             with db.engine.begin() as conn:
                 conn.execute(text("ALTER TABLE clients ADD COLUMN remarque VARCHAR(300)"))
+
+    if "users" in table_names:
+        user_columns = {col["name"] for col in inspector.get_columns("users")}
+        if "role" not in user_columns:
+            with db.engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'invite'"))
+        with db.engine.begin() as conn:
+            conn.execute(text("UPDATE users SET role = 'admin' WHERE username = 'admin' AND (role IS NULL OR role = '')"))
+            conn.execute(text("UPDATE users SET role = 'invite' WHERE role IS NULL OR role = ''"))
 
 
 if __name__ == "__main__":

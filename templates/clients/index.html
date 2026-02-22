@@ -68,6 +68,7 @@
                    class="btn btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
                 <a href="{{ url_for('clients.edit', client_id=client.id) }}"
                    class="btn btn-outline-secondary" title="Modifier"><i class="bi bi-pencil"></i></a>
+                {% if current_user.is_admin %}
                 <button type="button"
                         class="btn btn-outline-danger js-delete-client"
                         title="Supprimer"
@@ -75,6 +76,7 @@
                         data-client-nom="{{ client.nom|e }}">
                   <i class="bi bi-trash"></i>
                 </button>
+                {% endif %}
               </div>
             </td>
           </tr>

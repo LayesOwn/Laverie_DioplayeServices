@@ -15,6 +15,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(64), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="invite")
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -23,6 +24,10 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
+
+    @property
+    def is_admin(self) -> bool:
+        return (self.role or "").lower() == "admin"
 
     def __repr__(self):
         return f"<User {self.username}>"
@@ -200,3 +205,16 @@ class DepenseInterne(db.Model):
 
     def __repr__(self):
         return f"<DepenseInterne {self.libelle} - {self.montant} XOF>"
+
+
+class RecetteJournaliereHistorique(db.Model):
+    __tablename__ = "recettes_journalieres_historiques"
+
+    id = db.Column(db.Integer, primary_key=True)
+    date_recette = db.Column(db.Date, nullable=False, unique=True, index=True)
+    montant = db.Column(db.Integer, nullable=False, default=0)
+    notes = db.Column(db.String(300), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<RecetteJournaliereHistorique {self.date_recette}={self.montant}>"

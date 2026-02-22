@@ -13,7 +13,6 @@
   </a>
 </div>
 
-<!-- ── KPIs Aujourd'hui ──────────────────────────── -->
 <h6 class="text-uppercase text-muted small fw-bold mb-2">Aujourd'hui</h6>
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-3">
@@ -26,7 +25,7 @@
   </div>
   <div class="col-6 col-lg-3">
     <div class="kpi-card bg-danger text-white">
-      <div class="kpi-label">Dépenses</div>
+      <div class="kpi-label">Depenses</div>
       <div class="kpi-val">{{ "{:,.0f}".format(depense_jour) }}</div>
       <small>XOF</small>
       <i class="bi bi-arrow-down-circle kpi-icon"></i>
@@ -34,7 +33,7 @@
   </div>
   <div class="col-6 col-lg-3">
     <div class="kpi-card {% if benefice_jour >= 0 %}bg-primary{% else %}bg-warning{% endif %} text-white">
-      <div class="kpi-label">Bénéfice</div>
+      <div class="kpi-label">Benefice</div>
       <div class="kpi-val">{{ "{:,.0f}".format(benefice_jour) }}</div>
       <small>XOF</small>
       <i class="bi bi-graph-up kpi-icon"></i>
@@ -42,72 +41,49 @@
   </div>
   <div class="col-6 col-lg-3">
     <div class="kpi-card bg-warning text-dark">
-      <div class="kpi-label">Créances</div>
+      <div class="kpi-label">Creances</div>
       <div class="kpi-val">{{ "{:,.0f}".format(montant_creances) }}</div>
-      <small>XOF — {{ nb_non_soldes }} tx</small>
+      <small>XOF - {{ nb_non_soldes }} tx</small>
       <i class="bi bi-clock-history kpi-icon"></i>
     </div>
   </div>
 </div>
 
-<!-- ── KPIs Mois ─────────────────────────────────── -->
 <h6 class="text-uppercase text-muted small fw-bold mb-2">Ce mois</h6>
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-4">
     <div class="card border-0 shadow-sm">
       <div class="card-body">
-        <div class="d-flex align-items-center gap-3">
-          <div class="rounded-circle bg-success bg-opacity-10 p-2">
-            <i class="bi bi-currency-dollar text-success fs-4"></i>
-          </div>
-          <div>
-            <div class="small text-muted">Recettes mensuelles</div>
-            <div class="fw-bold fs-5">{{ "{:,.0f}".format(recette_mois) }} XOF</div>
-          </div>
-        </div>
+        <div class="small text-muted">Recettes mensuelles</div>
+        <div class="fw-bold fs-5">{{ "{:,.0f}".format(recette_mois) }} XOF</div>
       </div>
     </div>
   </div>
   <div class="col-6 col-lg-4">
     <div class="card border-0 shadow-sm">
       <div class="card-body">
-        <div class="d-flex align-items-center gap-3">
-          <div class="rounded-circle bg-danger bg-opacity-10 p-2">
-            <i class="bi bi-wallet2 text-danger fs-4"></i>
-          </div>
-          <div>
-            <div class="small text-muted">Dépenses mensuelles</div>
-            <div class="fw-bold fs-5">{{ "{:,.0f}".format(depense_mois) }} XOF</div>
-          </div>
-        </div>
+        <div class="small text-muted">Depenses mensuelles</div>
+        <div class="fw-bold fs-5">{{ "{:,.0f}".format(depense_mois) }} XOF</div>
       </div>
     </div>
   </div>
   <div class="col-6 col-lg-4">
     <div class="card border-0 shadow-sm">
       <div class="card-body">
-        <div class="d-flex align-items-center gap-3">
-          <div class="rounded-circle bg-primary bg-opacity-10 p-2">
-            <i class="bi bi-graph-up-arrow text-primary fs-4"></i>
-          </div>
-          <div>
-            <div class="small text-muted">Bénéfice mensuel</div>
-            <div class="fw-bold fs-5 {% if benefice_mois < 0 %}text-danger{% else %}text-success{% endif %}">
-              {{ "{:,.0f}".format(benefice_mois) }} XOF
-            </div>
-          </div>
+        <div class="small text-muted">Benefice mensuel</div>
+        <div class="fw-bold fs-5 {% if benefice_mois < 0 %}text-danger{% else %}text-success{% endif %}">
+          {{ "{:,.0f}".format(benefice_mois) }} XOF
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ── Graphiques ────────────────────────────────── -->
 <div class="row g-3 mb-4">
   <div class="col-lg-8">
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white border-0 fw-semibold">
-        <i class="bi bi-bar-chart-fill text-primary me-1"></i> Évolution mensuelle (12 mois)
+        <i class="bi bi-bar-chart-fill text-primary me-1"></i> Evolution mensuelle (12 mois)
       </div>
       <div class="card-body">
         <div id="graph-mensuel" style="height:280px;"></div>
@@ -117,7 +93,7 @@
   <div class="col-lg-4">
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white border-0 fw-semibold">
-        <i class="bi bi-pie-chart-fill text-primary me-1"></i> Répartition services
+        <i class="bi bi-pie-chart-fill text-primary me-1"></i> Repartition services
       </div>
       <div class="card-body">
         <div id="graph-services" style="height:280px;"></div>
@@ -126,7 +102,29 @@
   </div>
 </div>
 
-<!-- ── Top clients + services ────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="bi bi-calendar3 text-primary me-1"></i> Comparaison mensuelle (saisie historique)
+      </div>
+      <div class="card-body">
+        <div id="graph-historique-mensuel" style="height:280px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 fw-semibold">
+        <i class="bi bi-bar-chart-line text-primary me-1"></i> Totaux annuels (saisie historique)
+      </div>
+      <div class="card-body">
+        <div id="graph-historique-annuel" style="height:280px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="row g-3">
   <div class="col-lg-6">
     <div class="card border-0 shadow-sm">
@@ -144,7 +142,7 @@
               <td class="text-end fw-semibold text-success">{{ "{:,.0f}".format(total) }} XOF</td>
             </tr>
             {% else %}
-            <tr><td colspan="3" class="text-center text-muted py-3">Aucune donnée</td></tr>
+            <tr><td colspan="3" class="text-center text-muted py-3">Aucune donnee</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -167,7 +165,7 @@
               <td class="text-end fw-semibold">{{ nb }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="3" class="text-center text-muted py-3">Aucune donnée</td></tr>
+            <tr><td colspan="3" class="text-center text-muted py-3">Aucune donnee</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -180,6 +178,8 @@
 {% block extra_js %}
 <script id="graph-mensuel-data" type="application/json">{{ graph_mensuel | safe }}</script>
 <script id="graph-services-data" type="application/json">{{ graph_services | safe }}</script>
+<script id="graph-historique-mensuel-data" type="application/json">{{ graph_historique_mensuel | safe }}</script>
+<script id="graph-historique-annuel-data" type="application/json">{{ graph_historique_annuel | safe }}</script>
 <script>
   const graphMensuel = JSON.parse(
     document.getElementById('graph-mensuel-data').textContent || '{"data":[],"layout":{}}'
@@ -187,8 +187,16 @@
   const graphServices = JSON.parse(
     document.getElementById('graph-services-data').textContent || '{"data":[],"layout":{}}'
   );
+  const graphHistoriqueMensuel = JSON.parse(
+    document.getElementById('graph-historique-mensuel-data').textContent || '{"data":[],"layout":{}}'
+  );
+  const graphHistoriqueAnnuel = JSON.parse(
+    document.getElementById('graph-historique-annuel-data').textContent || '{"data":[],"layout":{}}'
+  );
 
   Plotly.newPlot('graph-mensuel', graphMensuel.data, graphMensuel.layout, {responsive: true, displayModeBar: false});
   Plotly.newPlot('graph-services', graphServices.data, graphServices.layout, {responsive: true, displayModeBar: false});
+  Plotly.newPlot('graph-historique-mensuel', graphHistoriqueMensuel.data, graphHistoriqueMensuel.layout, {responsive: true, displayModeBar: false});
+  Plotly.newPlot('graph-historique-annuel', graphHistoriqueAnnuel.data, graphHistoriqueAnnuel.layout, {responsive: true, displayModeBar: false});
 </script>
 {% endblock %}
