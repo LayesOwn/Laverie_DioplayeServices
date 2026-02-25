@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Recettes unifiées{% endblock %}
+{% block page_title %}Recettes unifiées{% endblock %}
+
+{% block extra_css %}
+<style>
+  .table-unifiee th, .table-unifiee td { white-space: nowrap; font-size: .85rem; }
+  .table-unifiee .col-mois { font-weight: 600; background: #f8f9fa; position: sticky; left: 0; z-index: 1; }
+  .cell-hist    { background: #e8f0fe; }
+  .cell-actuel  { background: #e6f9f0; }
+  .cell-mixte   { background: #fff3cd; }
+  .cell-vide    { color: #ccc; }
+  .legend-hist   { display: inline-block; width:12px; height:12px; background:#e8f0fe; border:1px solid #b0c4de; border-radius:2px; }
+  .legend-actuel { display: inline-block; width:12px; height:12px; background:#e6f9f0; border:1px solid #98d4b0; border-radius:2px; }
+  .legend-mixte  { display: inline-block; width:12px; height:12px; background:#fff3cd; border:1px solid #f0c060; border-radius:2px; }
+  .row-total td  { font-weight: 700; background: #f0f4f8 !important; border-top: 2px solid #dee2e6; }
+  .annual-best   { font-weight: 700; color: #198754; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="fw-bold mb-0">
+    <i class="bi bi-bar-chart-line text-primary me-2"></i>Recettes unifiées — Historique &amp; Transactions
+  </h4>
+  <a href="{{ url_for('recettes_historiques.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-database me-1"></i>Gérer l'historique
+  </a>
+</div>
+
+{# Légende #}
+<div class="d-flex gap-3 align-items-center mb-3 small text-muted">
+  <span><span class="legend-hist"></span> Données historiques</span>
+  <span><span class="legend-actuel"></span> Transactions (système)</span>
+  <span><span class="legend-mixte"></span> Mixte (les deux)</span>
+</div>
+
+{% if not years %}
+<div class="alert alert-info">
+  <i class="bi bi-info-circle me-1"></i>
+  Aucune donnée de recette disponible. Ajoutez des recettes historiques ou enregistrez des transactions.
+</div>
+{% else %}
+
+{# ── Tableau mensuel ────────────────────────────────────────────────────── #}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-0 fw-semibold py-2">
+    <i class="bi bi-table me-1 text-primary"></i>Tableau mensuel (XOF)
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover mb-0 table-unifiee">
+        <thead class="table-light">
+          <tr>
+            <th class="col-mois">Mois</th>
+            {% for y in years %}
+            <th class="text-end">{{ y }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in tableau %}
+          {# Détecter si la ligne a au moins une valeur #}
+          {% set has_data = row['values'].values() | selectattr('montant') | list | length > 0 %}
+          <tr {% if not has_data %}class="text-muted"{% endif %}>
+            <td class="col-mois">{{ row.mois }}</td>
+            {% for y in years %}
+            {% set cell = row['values'][y] %}
+            {% if cell.montant > 0 %}
+              {% if cell.has_hist and cell.has_actuel %}
+                <td class="text-end cell-mixte">{{ "{:,.0f}".format(cell.montant) }}</td>
+              {% elif cell.has_hist %}
+                <td class="text-end cell-hist">{{ "{:,.0f}".format(cell.montant) }}</td>
+              {% else %}
+                <td class="text-end cell-actuel">{{ "{:,.0f}".format(cell.montant) }}</td>
+              {% endif %}
+            {% else %}
+              <td class="text-end cell-vide">—</td>
+            {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="row-total">
+            <td class="col-mois">TOTAL</td>
+            {% for ann in annuel %}
+            <td class="text-end">{{ "{:,.0f}".format(ann.total) }}</td>
+            {% endfor %}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ── Comparaison annuelle ────────────────────────────────────────────────── #}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-0 fw-semibold py-2">
+    <i class="bi bi-bar-chart me-1 text-success"></i>Comparaison annuelle
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" style="font-size:.88rem;">
+        <thead class="table-light">
+          <tr>
+            <th>Année</th>
+            <th class="text-end">Total recettes</th>
+            <th>Source</th>
+            <th class="text-end">Part du total global</th>
+            <th>Barre</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set max_annual = annuel | map(attribute='total') | max %}
+          {% for ann in annuel | sort(attribute='annee', reverse=True) %}
+          <tr>
+            <td class="fw-semibold">{{ ann.annee }}</td>
+            <td class="text-end {% if ann.total == max_annual %}annual-best{% endif %}">
+              {{ "{:,.0f}".format(ann.total) }} XOF
+              {% if ann.total == max_annual %}<i class="bi bi-trophy-fill text-warning ms-1" title="Meilleure année"></i>{% endif %}
+            </td>
+            <td>
+              {% if ann.source == 'historique' %}
+              <span class="badge" style="background:#e8f0fe;color:#3050a0;">Historique</span>
+              {% elif ann.source == 'actuel' %}
+              <span class="badge" style="background:#e6f9f0;color:#0a6640;">Transactions</span>
+              {% else %}
+              <span class="badge" style="background:#fff3cd;color:#7a5500;">Mixte</span>
+              {% endif %}
+            </td>
+            <td class="text-end text-muted small">
+              {% if grand_total > 0 %}{{ "{:.1f}".format(ann.total / grand_total * 100) }}%{% else %}—{% endif %}
+            </td>
+            <td style="width:200px; vertical-align:middle;">
+              {% if max_annual > 0 %}
+              {% set pct = (ann.total / max_annual * 100) | round | int %}
+              <div style="background:#e9ecef; border-radius:4px; height:10px;">
+                <div style="width:{{ pct }}%; background:{% if ann.source == 'historique' %}#4472ca{% elif ann.source == 'actuel' %}#198754{% else %}#f0a500{% endif %}; height:10px; border-radius:4px;"></div>
+              </div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="table-secondary fw-bold">
+            <td>TOTAL GLOBAL</td>
+            <td class="text-end">{{ "{:,.0f}".format(grand_total) }} XOF</td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}

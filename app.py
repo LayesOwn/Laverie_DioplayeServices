@@ -3,7 +3,7 @@ DIOLAVERIE - Point d'entrée de l'application Flask
 Pattern : Application Factory
 """
 import os
-from flask import Flask, current_app
+from flask import Flask, current_app, render_template
 from sqlalchemy import inspect, text
 from config import config
 from extensions import db, login_manager, csrf, migrate
@@ -53,6 +53,8 @@ def create_app(config_name: str = None, test_config: dict | None = None) -> Flas
     app.register_blueprint(recettes_historiques_bp, url_prefix="/recettes-historiques")
     app.register_blueprint(exports_bp, url_prefix="/exports")
 
+    _register_error_handlers(app)
+
     with app.app_context():
         db.create_all()
         _ensure_schema_compatibility()
@@ -60,6 +62,23 @@ def create_app(config_name: str = None, test_config: dict | None = None) -> Flas
         _backfill_legacy_payments()
 
     return app
+
+
+def _register_error_handlers(app: Flask):
+    """Gestionnaires d'erreurs HTTP globaux."""
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return render_template("errors/404.html"), 404
+
+    @app.errorhandler(403)
+    def forbidden(e):
+        return render_template("errors/403.html"), 403
+
+    @app.errorhandler(500)
+    def internal_error(e):
+        db.session.rollback()
+        return render_template("errors/500.html"), 500
 
 
 def _seed_default_data():
@@ -182,6 +201,29 @@ def _ensure_schema_compatibility():
         with db.engine.begin() as conn:
             conn.execute(text("UPDATE users SET role = 'admin' WHERE username = 'admin' AND (role IS NULL OR role = '')"))
             conn.execute(text("UPDATE users SET role = 'invite' WHERE role IS NULL OR role = ''"))
+
+    # Traçabilité : created_by_id
+    for table, col_sql in [
+        ("transactions",      "ALTER TABLE transactions ADD COLUMN created_by_id INTEGER REFERENCES users(id)"),
+        ("paiements",         "ALTER TABLE paiements ADD COLUMN created_by_id INTEGER REFERENCES users(id)"),
+        ("depenses_internes", "ALTER TABLE depenses_internes ADD COLUMN created_by_id INTEGER REFERENCES users(id)"),
+    ]:
+        if table in table_names:
+            existing = {col["name"] for col in inspector.get_columns(table)}
+            if "created_by_id" not in existing:
+                with db.engine.begin() as conn:
+                    conn.execute(text(col_sql))
+
+    # Soft delete : deleted_at
+    for table, col_sql in [
+        ("transactions",      "ALTER TABLE transactions ADD COLUMN deleted_at DATETIME"),
+        ("depenses_internes", "ALTER TABLE depenses_internes ADD COLUMN deleted_at DATETIME"),
+    ]:
+        if table in table_names:
+            existing = {col["name"] for col in inspector.get_columns(table)}
+            if "deleted_at" not in existing:
+                with db.engine.begin() as conn:
+                    conn.execute(text(col_sql))
 
 
 if __name__ == "__main__":

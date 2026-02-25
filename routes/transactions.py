@@ -1,10 +1,10 @@
-﻿"""
+"""
 Blueprint Transactions - Recettes clients avec gestion du crédit.
 """
-from datetime import date
+from datetime import date, datetime
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
 from wtforms import DateField, FloatField, IntegerField, SelectField, StringField, SubmitField
 from wtforms.validators import DataRequired, Length, NumberRange, Optional
@@ -12,6 +12,7 @@ from wtforms.validators import DataRequired, Length, NumberRange, Optional
 from config import Config
 from extensions import db
 from models import Client, Paiement, Service, Transaction
+from routes import require_admin
 
 transactions_bp = Blueprint("transactions", __name__)
 
@@ -124,7 +125,10 @@ def index():
     page = request.args.get("page", 1, type=int)
     filtre = request.args.get("filtre", "tous")
 
-    query = Transaction.query.order_by(Transaction.date_transaction.desc())
+    query = Transaction.query.filter(
+        Transaction.deleted_at == None  # noqa: E711
+    ).order_by(Transaction.date_transaction.desc())
+
     if filtre == "non_soldes":
         query = query.filter(Transaction.montant_paye < Transaction.total)
 
@@ -183,6 +187,7 @@ def create():
             montant_paye=0.0,
             date_transaction=form.date_transaction.data,
             notes=form.notes.data,
+            created_by_id=current_user.id,
         )
         db.session.add(transaction)
         db.session.flush()
@@ -192,6 +197,7 @@ def create():
                 montant=avance,
                 date_paiement=form.date_transaction.data,
                 notes="Avance à la commande",
+                created_by_id=current_user.id,
             )
 
         db.session.commit()
@@ -234,6 +240,7 @@ def paiement(tx_id: int):
             montant=form.montant.data,
             date_paiement=form.date_paiement.data,
             notes=form.notes.data,
+            created_by_id=current_user.id,
         )
         if paye <= 0:
             flash("Aucun paiement enregistré (transaction déjà soldée).", "warning")
@@ -256,10 +263,38 @@ def paiement(tx_id: int):
 def delete(tx_id: int):
     tx = db.get_or_404(Transaction, tx_id)
     client_id = tx.client_id
-    db.session.delete(tx)
+    tx.deleted_at = datetime.utcnow()
     db.session.commit()
-    flash("Transaction supprimée.", "warning")
+    flash("Transaction déplacée dans la corbeille.", "warning")
     return redirect(url_for("clients.detail", client_id=client_id))
+
+
+@transactions_bp.route("/corbeille")
+@login_required
+@require_admin
+def corbeille():
+    page = request.args.get("page", 1, type=int)
+    pagination = (
+        Transaction.query.filter(Transaction.deleted_at != None)  # noqa: E711
+        .order_by(Transaction.deleted_at.desc())
+        .paginate(page=page, per_page=Config.ITEMS_PER_PAGE, error_out=False)
+    )
+    return render_template(
+        "transactions/corbeille.html",
+        transactions=pagination.items,
+        pagination=pagination,
+    )
+
+
+@transactions_bp.route("/<int:tx_id>/restaurer", methods=["POST"])
+@login_required
+@require_admin
+def restaurer(tx_id: int):
+    tx = db.get_or_404(Transaction, tx_id)
+    tx.deleted_at = None
+    db.session.commit()
+    flash("Transaction restaurée.", "success")
+    return redirect(url_for("transactions.corbeille"))
 
 
 @transactions_bp.route("/api/service-prix/<int:service_id>")

@@ -9,6 +9,11 @@
     <a href="{{ url_for('exports.depenses_csv') }}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-file-earmark-csv me-1"></i>CSV
     </a>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('depenses.corbeille') }}" class="btn btn-outline-warning btn-sm">
+      <i class="bi bi-trash me-1"></i>Corbeille
+    </a>
+    {% endif %}
     <a href="{{ url_for('depenses.create') }}" class="btn btn-danger btn-sm">
       <i class="bi bi-plus-lg me-1"></i> Nouvelle dépense
     </a>

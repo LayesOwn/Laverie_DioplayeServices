@@ -13,7 +13,8 @@ from wtforms.validators import DataRequired, Length, NumberRange, Optional
 
 from config import Config
 from extensions import db
-from models import RecetteJournaliereHistorique
+from sqlalchemy import func
+from models import RecetteJournaliereHistorique, Paiement, Transaction
 from routes import require_admin
 
 recettes_historiques_bp = Blueprint("recettes_historiques", __name__)
@@ -199,3 +200,83 @@ def delete(entry_id: int):
     db.session.commit()
     flash("Recette historique supprimée.", "warning")
     return redirect(url_for("recettes_historiques.index"))
+
+
+@recettes_historiques_bp.route("/unifiees")
+@login_required
+def unifiees():
+    """Vue unifiée : recettes historiques + recettes transactionnelles, par mois et par année."""
+    from collections import defaultdict
+
+    MOIS_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun",
+                   "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"]
+
+    # ── 1. Recettes historiques par jour ──────────────────────────────────────
+    hist_rows = RecetteJournaliereHistorique.query.all()
+    hist_par_jour = {row.date_recette: float(row.montant) for row in hist_rows}
+
+    # ── 2. Paiements transactionnels par jour ─────────────────────────────────
+    paiement_rows = (
+        db.session.query(
+            Paiement.date_paiement,
+            func.sum(Paiement.montant).label("total"),
+        )
+        .join(Transaction, Transaction.id == Paiement.transaction_id)
+        .filter(Transaction.deleted_at == None)  # noqa: E711
+        .group_by(Paiement.date_paiement)
+        .all()
+    )
+    actuel_par_jour = {row.date_paiement: float(row.total) for row in paiement_rows}
+
+    # ── 3. Fusion : agrégation par (année, mois) ──────────────────────────────
+    # Stratégie : additionner les deux sources (pas de double-comptage prévu car
+    # les dates historiques précèdent l'utilisation du système transactionnel)
+    monthly = defaultdict(lambda: {"montant": 0.0, "has_hist": False, "has_actuel": False})
+
+    for d, montant in hist_par_jour.items():
+        key = (d.year, d.month)
+        monthly[key]["montant"] += montant
+        monthly[key]["has_hist"] = True
+
+    for d, montant in actuel_par_jour.items():
+        key = (d.year, d.month)
+        monthly[key]["montant"] += montant
+        monthly[key]["has_actuel"] = True
+
+    # ── 4. Liste des années présentes ─────────────────────────────────────────
+    years = sorted({k[0] for k in monthly.keys()}) if monthly else []
+
+    # ── 5. Tableau mensuel (12 lignes × N années) ─────────────────────────────
+    tableau = []
+    annual_totals = {y: 0.0 for y in years}
+
+    for m in range(1, 13):
+        row = {"mois": MOIS_LABELS[m - 1], "num": m, "values": {}}
+        for y in years:
+            cell = monthly.get((y, m), {"montant": 0.0, "has_hist": False, "has_actuel": False})
+            row["values"][y] = cell
+            annual_totals[y] += cell["montant"]
+        tableau.append(row)
+
+    # ── 6. Totaux annuels avec indication de source ───────────────────────────
+    annuel = []
+    for y in years:
+        has_hist = any(monthly.get((y, m), {}).get("has_hist") for m in range(1, 13))
+        has_actuel = any(monthly.get((y, m), {}).get("has_actuel") for m in range(1, 13))
+        if has_hist and has_actuel:
+            source = "mixte"
+        elif has_hist:
+            source = "historique"
+        else:
+            source = "actuel"
+        annuel.append({"annee": y, "total": annual_totals[y], "source": source})
+
+    grand_total = sum(annual_totals.values())
+
+    return render_template(
+        "recettes_historiques/unifiees.html",
+        tableau=tableau,
+        years=years,
+        annuel=annuel,
+        grand_total=grand_total,
+    )

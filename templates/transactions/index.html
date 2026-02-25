@@ -12,6 +12,11 @@
     <a href="{{ url_for('exports.transactions_excel') }}" class="btn btn-outline-success btn-sm">
       <i class="bi bi-file-earmark-excel me-1"></i>Excel
     </a>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('transactions.corbeille') }}" class="btn btn-outline-warning btn-sm">
+      <i class="bi bi-trash me-1"></i>Corbeille
+    </a>
+    {% endif %}
     <a href="{{ url_for('transactions.create') }}" class="btn btn-primary btn-sm">
       <i class="bi bi-plus-lg me-1"></i> Nouvelle
     </a>

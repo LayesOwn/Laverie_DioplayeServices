@@ -1,0 +1,96 @@
+/* ── DIOLAVERIE — Styles personnalisés ────────────────────────────────────── */
+
+:root {
+  --sidebar-width: 250px;
+  --primary: #0d6efd;
+  --success: #198754;
+}
+
+body { background: #f0f4f8; font-family: 'Inter', sans-serif; }
+
+/* ── Sidebar ── */
+#sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  background: linear-gradient(180deg, #0a2d6e 0%, #0d6efd 100%);
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 100;
+  transition: transform 0.3s ease;
+}
+#sidebar .brand {
+  padding: 1.5rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,.15);
+}
+#sidebar .brand h5 { color: #fff; font-weight: 700; margin: 0; font-size: .95rem; }
+#sidebar .brand small { color: rgba(255,255,255,.65); font-size: .75rem; }
+#sidebar .nav-link {
+  color: rgba(255,255,255,.8);
+  padding: .65rem 1.2rem;
+  border-radius: 8px;
+  margin: 2px 8px;
+  transition: all .2s;
+  font-size: .88rem;
+}
+#sidebar .nav-link:hover,
+#sidebar .nav-link.active {
+  background: rgba(255,255,255,.18);
+  color: #fff;
+}
+#sidebar .nav-link i { width: 20px; text-align: center; margin-right: 8px; }
+#sidebar .nav-section {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: rgba(255,255,255,.45);
+  padding: .75rem 1.4rem .25rem;
+}
+
+/* ── Main content ── */
+#main-content {
+  margin-left: var(--sidebar-width);
+  min-height: 100vh;
+}
+.topbar {
+  background: #fff;
+  border-bottom: 1px solid #e9ecef;
+  padding: .75rem 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.page-content { padding: 1.5rem; }
+
+/* ── Cards KPI ── */
+.kpi-card {
+  border: none;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card .kpi-icon {
+  font-size: 2rem;
+  opacity: .15;
+  position: absolute;
+  right: 1rem;
+  bottom: .5rem;
+}
+.kpi-card .kpi-val { font-size: 1.5rem; font-weight: 700; }
+.kpi-card .kpi-label { font-size: .8rem; opacity: .85; }
+
+/* ── Tables ── */
+.table thead th { background: #f8f9fa; font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; }
+.table td { vertical-align: middle; font-size: .9rem; }
+
+/* ── Badges ── */
+.badge-solde { background: #d1fae5; color: #065f46; }
+.badge-du    { background: #fee2e2; color: #991b1b; }
+
+/* ── Mobile responsive ── */
+@media (max-width: 768px) {
+  #sidebar { transform: translateX(-100%); }
+  #sidebar.show { transform: translateX(0); }
+  #main-content { margin-left: 0; }
+  .kpi-val { font-size: 1.2rem; }
+}

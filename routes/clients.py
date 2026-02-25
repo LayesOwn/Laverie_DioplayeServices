@@ -87,6 +87,7 @@ def detail(client_id: int):
 
     pagination = (
         Transaction.query.filter_by(client_id=client_id)
+        .filter(Transaction.deleted_at == None)  # noqa: E711
         .order_by(Transaction.date_transaction.desc())
         .paginate(page=page, per_page=Config.ITEMS_PER_PAGE, error_out=False)
     )

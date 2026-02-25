@@ -43,7 +43,7 @@
             <div class="input-group">
               {{ form.montant(class="form-control form-control-lg" + (" is-invalid" if form.montant.errors else ""),
                               placeholder=("{:,.0f}".format(transaction.solde_restant)),
-                              max=transaction.solde_restant) }}
+                              max=(transaction.solde_restant | int)) }}
               <span class="input-group-text">XOF</span>
             </div>
             <div class="form-text">Maximum : {{ "{:,.0f}".format(transaction.solde_restant) }} XOF</div>
@@ -65,7 +65,7 @@
             <button type="button"
                     id="payerSoldeBtn"
                     class="btn btn-outline-success btn-sm"
-                    data-solde="{{ transaction.solde_restant }}">
+                    data-solde="{{ transaction.solde_restant | int }}">
               <i class="bi bi-check-all me-1"></i>Payer le solde complet
             </button>
           </div>
@@ -87,6 +87,7 @@
               <tr>
                 <th>Date</th>
                 <th class="text-end">Montant</th>
+                <th>Par</th>
                 <th>Notes</th>
               </tr>
             </thead>
@@ -95,6 +96,7 @@
               <tr>
                 <td>{{ p.date_paiement.strftime("%d/%m/%Y") }}</td>
                 <td class="text-end text-success fw-semibold">{{ "{:,.0f}".format(p.montant) }} XOF</td>
+                <td><small class="text-muted">{{ p.created_by.username if p.created_by else "—" }}</small></td>
                 <td>{{ p.notes or "-" }}</td>
               </tr>
               {% endfor %}

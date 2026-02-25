@@ -16,7 +16,12 @@ exports_bp = Blueprint("exports", __name__)
 @exports_bp.route("/transactions/csv")
 @login_required
 def transactions_csv():
-    transactions = Transaction.query.order_by(Transaction.date_transaction.desc()).all()
+    transactions = (
+        Transaction.query
+        .filter(Transaction.deleted_at == None)  # noqa: E711
+        .order_by(Transaction.date_transaction.desc())
+        .all()
+    )
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")
     writer.writerow(["ID", "Date", "Client", "Service", "Quantité",
@@ -29,7 +34,7 @@ def transactions_csv():
             t.service.nom,
             t.quantite,
             t.total,
-            t.montant_paye,
+            t.total_paye,
             t.solde_restant,
             t.notes or "",
         ])
@@ -89,7 +94,12 @@ def transactions_excel():
         cell.font = header_font
         cell.alignment = Alignment(horizontal="center")
 
-    transactions = Transaction.query.order_by(Transaction.date_transaction.desc()).all()
+    transactions = (
+        Transaction.query
+        .filter(Transaction.deleted_at == None)  # noqa: E711
+        .order_by(Transaction.date_transaction.desc())
+        .all()
+    )
     for row, t in enumerate(transactions, 2):
         ws.append([
             t.id,
@@ -98,7 +108,7 @@ def transactions_excel():
             t.service.nom,
             t.quantite,
             t.total,
-            t.montant_paye,
+            t.total_paye,
             t.solde_restant,
             t.notes or "",
         ])
@@ -157,7 +167,7 @@ def recu_pdf(tx_id: int):
         ["Quantité", str(tx.quantite)],
         ["Prix unitaire", f"{tx.service.prix_unitaire:,.0f} XOF"],
         ["TOTAL", f"{tx.total:,.0f} XOF"],
-        ["Montant payé", f"{tx.montant_paye:,.0f} XOF"],
+        ["Montant payé", f"{tx.total_paye:,.0f} XOF"],
         ["Reste dû", f"{tx.solde_restant:,.0f} XOF"],
     ]
 

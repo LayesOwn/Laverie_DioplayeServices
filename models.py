@@ -1,4 +1,4 @@
-﻿"""
+"""
 Modeles SQLAlchemy - DIOLAVERIE
 Tables : User, Client, Service, Transaction, Paiement, DepenseInterne
 """
@@ -57,6 +57,7 @@ class Client(db.Model):
         ).filter(
             Transaction.client_id == self.id,
             Transaction.type_transaction == "recette",
+            Transaction.deleted_at == None,  # noqa: E711
         ).scalar()
         return float(result or 0)
 
@@ -69,6 +70,7 @@ class Client(db.Model):
         ).filter(
             Transaction.client_id == self.id,
             Transaction.type_transaction == "recette",
+            Transaction.deleted_at == None,  # noqa: E711
         ).scalar()
         return float(result or 0)
 
@@ -111,15 +113,24 @@ class Transaction(db.Model):
     date_transaction = db.Column(db.Date, default=date.today)
     notes = db.Column(db.String(300), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Traçabilité
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    # Soft delete
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
     client = db.relationship("Client", back_populates="transactions")
     service = db.relationship("Service", back_populates="transactions")
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
     paiements = db.relationship(
         "Paiement",
         back_populates="transaction",
         lazy="dynamic",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None
 
     @property
     def total_paye(self) -> float:
@@ -144,8 +155,14 @@ class Transaction(db.Model):
         if self.service:
             self.total = self.service.prix_unitaire * self.quantite
 
-    def enregistrer_paiement(self, montant: float, date_paiement: date = None, notes: str = None) -> float:
-        """Enregistre un paiement plafonne au reste du."""
+    def enregistrer_paiement(
+        self,
+        montant: float,
+        date_paiement: date = None,
+        notes: str = None,
+        created_by_id: int = None,
+    ) -> float:
+        """Enregistre un paiement plafonné au reste dû, avec protection anti-doublon."""
         if not self.id:
             db.session.flush()
 
@@ -162,11 +179,27 @@ class Transaction(db.Model):
             montant=paye,
             date_paiement=date_paiement or date.today(),
             notes=notes,
+            created_by_id=created_by_id,
         )
         db.session.add(paiement)
+        db.session.flush()
 
-        # Denormalized value kept for compatibility with existing screens/filters
-        self.montant_paye = float(self.montant_paye or 0) + paye
+        # Protection race condition : re-vérifier le total depuis la DB
+        nouveau_total_paye = db.session.query(
+            db.func.coalesce(db.func.sum(Paiement.montant), 0)
+        ).filter(Paiement.transaction_id == self.id).scalar() or 0
+
+        if float(nouveau_total_paye) > float(self.total or 0):
+            excedent = float(nouveau_total_paye) - float(self.total or 0)
+            paye = max(0.0, paye - excedent)
+            if paye <= 0:
+                db.session.expunge(paiement)
+                return 0.0
+            paiement.montant = paye
+            nouveau_total_paye = float(self.total or 0)
+
+        # Maintenir la valeur dénormalisée en cohérence
+        self.montant_paye = float(nouveau_total_paye)
         return paye
 
     def __repr__(self):
@@ -182,8 +215,11 @@ class Paiement(db.Model):
     date_paiement = db.Column(db.Date, default=date.today, nullable=False)
     notes = db.Column(db.String(300), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Traçabilité
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
 
     transaction = db.relationship("Transaction", back_populates="paiements")
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
 
     def __repr__(self):
         return f"<Paiement tx={self.transaction_id} montant={self.montant}>"
@@ -202,6 +238,16 @@ class DepenseInterne(db.Model):
     date_depense = db.Column(db.Date, default=date.today)
     notes = db.Column(db.String(300), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Traçabilité
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    # Soft delete
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None
 
     def __repr__(self):
         return f"<DepenseInterne {self.libelle} - {self.montant} XOF>"

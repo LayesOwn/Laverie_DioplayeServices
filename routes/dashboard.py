@@ -21,19 +21,31 @@ dashboard_bp = Blueprint("dashboard", __name__)
 
 
 def _recette_periode(debut: date, fin: date) -> float:
-    result = db.session.query(
+    """Recettes fusionnées : paiements transactionnels + saisie historique."""
+    paiements = db.session.query(
         func.coalesce(func.sum(Paiement.montant), 0)
+    ).join(
+        Transaction, Transaction.id == Paiement.transaction_id
     ).filter(
-        Paiement.date_paiement.between(debut, fin)
+        Transaction.deleted_at == None,  # noqa: E711
+        Paiement.date_paiement.between(debut, fin),
     ).scalar()
-    return float(result or 0)
+
+    historique = db.session.query(
+        func.coalesce(func.sum(RecetteJournaliereHistorique.montant), 0)
+    ).filter(
+        RecetteJournaliereHistorique.date_recette.between(debut, fin)
+    ).scalar()
+
+    return float(paiements or 0) + float(historique or 0)
 
 
 def _depense_periode(debut: date, fin: date) -> float:
     result = db.session.query(
         func.coalesce(func.sum(DepenseInterne.montant), 0)
     ).filter(
-        DepenseInterne.date_depense.between(debut, fin)
+        DepenseInterne.date_depense.between(debut, fin),
+        DepenseInterne.deleted_at == None,  # noqa: E711
     ).scalar()
     return float(result or 0)
 
@@ -59,10 +71,16 @@ def index():
     depense_annee = _depense_periode(debut_annee, fin_annee)
     benefice_annee = recette_annee - depense_annee
 
-    nb_non_soldes = Transaction.query.filter(Transaction.montant_paye < Transaction.total).count()
+    nb_non_soldes = Transaction.query.filter(
+        Transaction.montant_paye < Transaction.total,
+        Transaction.deleted_at == None,  # noqa: E711
+    ).count()
     montant_creances = db.session.query(
         func.coalesce(func.sum(Transaction.total - Transaction.montant_paye), 0)
-    ).filter(Transaction.montant_paye < Transaction.total).scalar()
+    ).filter(
+        Transaction.montant_paye < Transaction.total,
+        Transaction.deleted_at == None,  # noqa: E711
+    ).scalar()
 
     top_clients = (
         db.session.query(Client.nom, func.sum(Paiement.montant).label("total"))
@@ -194,88 +212,105 @@ def _graph_services(top_services) -> str:
 
 
 def _graph_historique_mensuel_par_annee() -> str:
-    rows = db.session.query(
+    """Recettes mensuelles unifiées par année (historique + paiements actuels)."""
+    from collections import defaultdict
+
+    monthly_by_year = defaultdict(lambda: [0.0] * 12)
+
+    # 1. Recettes historiques
+    hist_rows = db.session.query(
         func.strftime("%Y", RecetteJournaliereHistorique.date_recette).label("annee"),
         func.strftime("%m", RecetteJournaliereHistorique.date_recette).label("mois"),
         func.coalesce(func.sum(RecetteJournaliereHistorique.montant), 0).label("total"),
-    ).group_by(
-        "annee",
-        "mois",
-    ).order_by(
-        "annee",
-        "mois",
-    ).all()
+    ).group_by("annee", "mois").order_by("annee", "mois").all()
 
-    if not rows:
+    for row in hist_rows:
+        m = max(1, min(12, int(row.mois))) - 1
+        monthly_by_year[str(row.annee)][m] += float(row.total or 0)
+
+    # 2. Paiements transactionnels (transactions non supprimées)
+    pay_rows = db.session.query(
+        func.strftime("%Y", Paiement.date_paiement).label("annee"),
+        func.strftime("%m", Paiement.date_paiement).label("mois"),
+        func.coalesce(func.sum(Paiement.montant), 0).label("total"),
+    ).join(
+        Transaction, Transaction.id == Paiement.transaction_id
+    ).filter(
+        Transaction.deleted_at == None  # noqa: E711
+    ).group_by("annee", "mois").order_by("annee", "mois").all()
+
+    for row in pay_rows:
+        m = max(1, min(12, int(row.mois))) - 1
+        monthly_by_year[str(row.annee)][m] += float(row.total or 0)
+
+    if not monthly_by_year:
         return json.dumps({"data": [], "layout": {}})
 
-    mois_labels = ["Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jul", "Aou", "Sep", "Oct", "Nov", "Dec"]
-    monthly_by_year = {}
-    for row in rows:
-        year = str(row.annee)
-        month_index = max(1, min(12, int(row.mois))) - 1
-        monthly_by_year.setdefault(year, [0] * 12)
-        monthly_by_year[year][month_index] = float(row.total or 0)
-
+    mois_labels = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"]
     palette = ["#0d6efd", "#198754", "#fd7e14", "#dc3545", "#20c997", "#6f42c1", "#0dcaf0", "#ffc107"]
     data = []
     for idx, year in enumerate(sorted(monthly_by_year.keys())):
-        data.append(
-            {
-                "type": "scatter",
-                "mode": "lines+markers",
-                "name": year,
-                "x": mois_labels,
-                "y": monthly_by_year[year],
-                "line": {"width": 2, "color": palette[idx % len(palette)]},
-            }
-        )
+        data.append({
+            "type": "scatter",
+            "mode": "lines+markers",
+            "name": year,
+            "x": mois_labels,
+            "y": monthly_by_year[year],
+            "line": {"width": 2, "color": palette[idx % len(palette)]},
+        })
 
-    return json.dumps(
-        {
-            "data": data,
-            "layout": {
-                "plot_bgcolor": "rgba(0,0,0,0)",
-                "paper_bgcolor": "rgba(0,0,0,0)",
-                "margin": {"l": 40, "r": 20, "t": 20, "b": 40},
-                "legend": {"orientation": "h", "y": -0.2},
-                "yaxis": {"tickformat": ",.0f", "ticksuffix": " XOF"},
-            },
-        }
-    )
+    return json.dumps({
+        "data": data,
+        "layout": {
+            "plot_bgcolor": "rgba(0,0,0,0)",
+            "paper_bgcolor": "rgba(0,0,0,0)",
+            "margin": {"l": 40, "r": 20, "t": 20, "b": 40},
+            "legend": {"orientation": "h", "y": -0.2},
+            "yaxis": {"tickformat": ",.0f", "ticksuffix": " XOF"},
+        },
+    })
 
 
 def _graph_historique_total_annuel() -> str:
-    rows = db.session.query(
+    """Totaux annuels unifiés (historique + paiements actuels)."""
+    from collections import defaultdict
+
+    totals = defaultdict(float)
+
+    # 1. Recettes historiques
+    hist_rows = db.session.query(
         func.strftime("%Y", RecetteJournaliereHistorique.date_recette).label("annee"),
         func.coalesce(func.sum(RecetteJournaliereHistorique.montant), 0).label("total"),
-    ).group_by(
-        "annee",
-    ).order_by(
-        "annee",
-    ).all()
+    ).group_by("annee").order_by("annee").all()
 
-    if not rows:
+    for row in hist_rows:
+        totals[str(row.annee)] += float(row.total or 0)
+
+    # 2. Paiements transactionnels (transactions non supprimées)
+    pay_rows = db.session.query(
+        func.strftime("%Y", Paiement.date_paiement).label("annee"),
+        func.coalesce(func.sum(Paiement.montant), 0).label("total"),
+    ).join(
+        Transaction, Transaction.id == Paiement.transaction_id
+    ).filter(
+        Transaction.deleted_at == None  # noqa: E711
+    ).group_by("annee").order_by("annee").all()
+
+    for row in pay_rows:
+        totals[str(row.annee)] += float(row.total or 0)
+
+    if not totals:
         return json.dumps({"data": [], "layout": {}})
 
-    labels = [str(r.annee) for r in rows]
-    values = [float(r.total or 0) for r in rows]
+    labels = sorted(totals.keys())
+    values = [totals[y] for y in labels]
 
-    return json.dumps(
-        {
-            "data": [
-                {
-                    "type": "bar",
-                    "x": labels,
-                    "y": values,
-                    "marker": {"color": "#0d6efd"},
-                }
-            ],
-            "layout": {
-                "plot_bgcolor": "rgba(0,0,0,0)",
-                "paper_bgcolor": "rgba(0,0,0,0)",
-                "margin": {"l": 40, "r": 20, "t": 20, "b": 40},
-                "yaxis": {"tickformat": ",.0f", "ticksuffix": " XOF"},
-            },
-        }
-    )
+    return json.dumps({
+        "data": [{"type": "bar", "x": labels, "y": values, "marker": {"color": "#0d6efd"}}],
+        "layout": {
+            "plot_bgcolor": "rgba(0,0,0,0)",
+            "paper_bgcolor": "rgba(0,0,0,0)",
+            "margin": {"l": 40, "r": 20, "t": 20, "b": 40},
+            "yaxis": {"tickformat": ",.0f", "ticksuffix": " XOF"},
+        },
+    })
