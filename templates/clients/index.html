@@ -5,9 +5,14 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h4 class="fw-bold mb-0"><i class="bi bi-people-fill text-primary me-2"></i>Clients</h4>
-  <a href="{{ url_for('transactions.create') }}" class="btn btn-primary btn-sm">
-    <i class="bi bi-receipt me-1"></i> Nouvelle transaction
-  </a>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('clients.create') }}" class="btn btn-success btn-sm">
+      <i class="bi bi-person-plus me-1"></i> Ajouter client
+    </a>
+    <a href="{{ url_for('transactions.create') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-receipt me-1"></i> Nouvelle transaction
+    </a>
+  </div>
 </div>
 
 <div class="card border-0 shadow-sm mb-3">

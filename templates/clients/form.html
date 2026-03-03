@@ -1,16 +1,18 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}{{ titre }}{% endblock %}
 {% block page_title %}{{ titre }}{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-6">
-    <div class="card border-0 shadow-sm">
+
+    {# ---- Infos client ---- #}
+    <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white border-0 fw-semibold py-3">
         <i class="bi bi-person-plus text-primary me-2"></i>{{ titre }}
       </div>
       <div class="card-body">
-        <form method="POST">
+        <form method="POST" id="clientForm">
           {{ form.hidden_tag() }}
 
           <div class="mb-3">
@@ -40,21 +42,125 @@
             </div>
           </div>
 
-          <div class="mb-4">
+          <div class="mb-3">
             {{ form.remarque.label(class="form-label fw-semibold small") }}
             {{ form.remarque(class="form-control" + (" is-invalid" if form.remarque.errors else ""),
                              placeholder="Information utile sur le client...") }}
           </div>
 
-          <div class="d-flex gap-2">
+          {# ---- Section transaction (création uniquement) ---- #}
+          {% if client is none %}
+          <hr class="my-4">
+          <p class="fw-semibold small text-muted mb-3">
+            <i class="bi bi-receipt me-1"></i>Première transaction <span class="fw-normal">(optionnel)</span>
+          </p>
+
+          <div class="mb-3">
+            {{ form.service_id.label(class="form-label fw-semibold small") }}
+            {{ form.service_id(class="form-select" + (" is-invalid" if form.service_id.errors else ""),
+                               id="serviceSelect") }}
+            {% for e in form.service_id.errors %}
+            <div class="invalid-feedback">{{ e }}</div>
+            {% endfor %}
+          </div>
+
+          <div id="txDetails" class="d-none">
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">Prix unitaire</label>
+              <div class="input-group">
+                <input type="text" id="prixAffiche" class="form-control" readonly>
+                <span class="input-group-text">XOF</span>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              {{ form.montant_paye.label(class="form-label fw-semibold small") }}
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-cash"></i></span>
+                {{ form.montant_paye(class="form-control" + (" is-invalid" if form.montant_paye.errors else ""),
+                                     placeholder="0", id="montantPaye") }}
+                <span class="input-group-text">XOF</span>
+              </div>
+              {% for e in form.montant_paye.errors %}
+              <div class="invalid-feedback">{{ e }}</div>
+              {% endfor %}
+              <div class="form-text" id="resteInfo"></div>
+            </div>
+
+            <div class="mb-3">
+              {{ form.date_transaction.label(class="form-label fw-semibold small") }}
+              {{ form.date_transaction(class="form-control" + (" is-invalid" if form.date_transaction.errors else ""),
+                                       id="dateTx") }}
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="d-flex gap-2 mt-4">
             <button type="submit" class="btn btn-primary">
               <i class="bi bi-check-lg me-1"></i> {{ form.submit.label.text }}
             </button>
             <a href="{{ url_for('clients.index') }}" class="btn btn-outline-secondary">Annuler</a>
           </div>
+
         </form>
       </div>
     </div>
+
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if client is none %}
+<script>
+(function () {
+  const serviceSelect = document.getElementById('serviceSelect');
+  const txDetails    = document.getElementById('txDetails');
+  const prixAffiche  = document.getElementById('prixAffiche');
+  const montantPaye  = document.getElementById('montantPaye');
+  const resteInfo    = document.getElementById('resteInfo');
+  const dateTx       = document.getElementById('dateTx');
+
+  // Date par défaut = aujourd'hui
+  if (dateTx && !dateTx.value) {
+    dateTx.value = new Date().toISOString().slice(0, 10);
+  }
+
+  function updatePrix() {
+    const opt = serviceSelect.options[serviceSelect.selectedIndex];
+    const serviceId = parseInt(serviceSelect.value);
+    if (!serviceId) {
+      txDetails.classList.add('d-none');
+      return;
+    }
+    txDetails.classList.remove('d-none');
+
+    // Lire le prix depuis le texte de l'option (format "Nom — 5 000 XOF")
+    fetch(`/transactions/api/service-prix/${serviceId}`)
+      .then(r => r.json())
+      .then(data => {
+        const prix = data.prix;
+        prixAffiche.value = prix.toLocaleString('fr-FR') + ' XOF';
+        prixAffiche.dataset.prix = prix;
+        updateReste();
+      });
+  }
+
+  function updateReste() {
+    const prix = parseFloat(prixAffiche.dataset.prix || 0);
+    const paye = parseInt((montantPaye.value || '0').replace(/\s/g, '')) || 0;
+    if (!prix) return;
+    const reste = Math.max(0, prix - paye);
+    resteInfo.textContent = `Reste dû : ${reste.toLocaleString('fr-FR')} XOF`;
+    resteInfo.className = reste > 0 ? 'form-text text-warning-emphasis' : 'form-text text-success';
+  }
+
+  serviceSelect.addEventListener('change', updatePrix);
+  montantPaye.addEventListener('input', updateReste);
+
+  // Restaurer l'état si retour erreur formulaire
+  if (parseInt(serviceSelect.value) > 0) updatePrix();
+})();
+</script>
+{% endif %}
 {% endblock %}

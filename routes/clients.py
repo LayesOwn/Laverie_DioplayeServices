@@ -1,26 +1,65 @@
-﻿"""
+"""
 Blueprint Clients - CRUD, historique et solde.
 """
+from datetime import date
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField
-from wtforms.validators import DataRequired, Length, Optional
+from wtforms import DateField, IntegerField, SelectField, StringField, SubmitField
+from wtforms.validators import DataRequired, Length, NumberRange, Optional
 
 from config import Config
 from extensions import db
-from models import Client, Transaction
+from models import Client, Service, Transaction
 from routes import require_admin
 
 clients_bp = Blueprint("clients", __name__)
 
 
+class StrictIntegerField(IntegerField):
+    """IntegerField qui accepte les espaces mais refuse les décimales."""
+
+    def process_formdata(self, valuelist):
+        if not valuelist:
+            return
+        raw = (valuelist[0] or "").strip().replace(" ", "")
+        if raw == "":
+            self.data = None
+            return
+        if "," in raw or "." in raw:
+            self.data = None
+            raise ValueError("Le montant doit être un entier.")
+        try:
+            self.data = int(raw)
+        except ValueError as exc:
+            self.data = None
+            raise ValueError("Nombre entier invalide.") from exc
+
+
 class ClientForm(FlaskForm):
+    # ---- Infos client ----
     nom = StringField("Nom complet", validators=[DataRequired(), Length(1, 100)])
     telephone = StringField("Téléphone", validators=[Optional(), Length(max=20)])
     adresse = StringField("Adresse", validators=[Optional(), Length(max=200)])
     remarque = StringField("Remarque", validators=[Optional(), Length(max=300)])
+
+    # ---- Première transaction (optionnelle) ----
+    service_id = SelectField("Service", coerce=int, validators=[Optional()])
+    montant_paye = StrictIntegerField(
+        "Montant payé (XOF)",
+        validators=[Optional(), NumberRange(min=0)],
+    )
+    date_transaction = DateField("Date de la transaction", validators=[Optional()])
+
     submit = SubmitField("Enregistrer")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.service_id.choices = [(0, "-- Aucune transaction --")] + [
+            (s.id, f"{s.nom}  —  {s.prix_unitaire:,.0f} XOF")
+            for s in Service.query.filter_by(actif=True).order_by(Service.nom).all()
+        ]
 
 
 @clients_bp.route("/")
@@ -45,8 +84,58 @@ def index():
 @clients_bp.route("/nouveau", methods=["GET", "POST"])
 @login_required
 def create():
-    flash("Ajoutez le client directement pendant la création d'une transaction.", "info")
-    return redirect(url_for("transactions.create"))
+    form = ClientForm()
+    if form.validate_on_submit():
+        client = Client(
+            nom=form.nom.data.strip(),
+            telephone=form.telephone.data.strip() if form.telephone.data else None,
+            adresse=form.adresse.data.strip() if form.adresse.data else None,
+            remarque=form.remarque.data.strip() if form.remarque.data else None,
+        )
+        db.session.add(client)
+        db.session.flush()
+
+        # ---- Transaction optionnelle ----
+        if form.service_id.data and form.service_id.data > 0:
+            service = db.session.get(Service, form.service_id.data)
+            if service:
+                total = int(round(service.prix_unitaire))
+                avance = int(form.montant_paye.data or 0)
+                avance = min(max(avance, 0), total)
+                date_tx = form.date_transaction.data or date.today()
+
+                transaction = Transaction(
+                    client_id=client.id,
+                    service_id=service.id,
+                    quantite=1.0,
+                    total=total,
+                    montant_paye=0.0,
+                    date_transaction=date_tx,
+                    created_by_id=current_user.id,
+                )
+                db.session.add(transaction)
+                db.session.flush()
+
+                if avance > 0:
+                    transaction.enregistrer_paiement(
+                        montant=avance,
+                        date_paiement=date_tx,
+                        notes="Paiement à la création",
+                        created_by_id=current_user.id,
+                    )
+
+                flash(
+                    f"Transaction enregistrée — Total : {total:,.0f} XOF | "
+                    f"Payé : {avance:,.0f} XOF | "
+                    f"Reste : {transaction.solde_restant:,.0f} XOF",
+                    "info",
+                )
+
+        db.session.commit()
+        flash(f"Client '{client.nom}' ajouté avec succès.", "success")
+        return redirect(url_for("clients.index"))
+
+    return render_template("clients/form.html", form=form, titre="Nouveau client", client=None)
 
 
 @clients_bp.route("/<int:client_id>/modifier", methods=["GET", "POST"])
