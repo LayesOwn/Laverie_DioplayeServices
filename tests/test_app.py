@@ -95,32 +95,31 @@ class AppTests(unittest.TestCase):
         self.login()
 
         create_route_resp = self.client.get("/clients/nouveau", follow_redirects=False)
-        self.assertEqual(create_route_resp.status_code, 302)
-        self.assertEqual(create_route_resp.headers.get("Location"), "/transactions/nouvelle")
+        self.assertEqual(create_route_resp.status_code, 200)
 
-        create_tx_resp = self.client.post(
-            "/transactions/nouvelle",
+        create_client_resp = self.client.post(
+            "/clients/nouveau",
             data={
-                "client_id": "0",
-                "new_client_nom": "Mamadou Diallo",
-                "new_client_telephone": "771234567",
-                "new_client_adresse": "Dakar",
-                "new_client_remarque": "Client prioritaire",
+                "nom": "Mamadou Diallo",
+                "telephone": "771234567",
+                "adresse": "Dakar",
+                "remarque": "Client prioritaire",
                 "service_id": str(self.seed_service_id),
-                "quantite": "1",
-                "avance": "0",
+                "montant_paye": "500",
                 "date_transaction": date.today().isoformat(),
-                "notes": "Client créé avec transaction",
             },
             follow_redirects=False,
         )
-        self.assertEqual(create_tx_resp.status_code, 302)
+        self.assertEqual(create_client_resp.status_code, 302)
 
         with self.app.app_context():
             created = ModelClient.query.filter_by(nom="Mamadou Diallo").first()
             self.assertIsNotNone(created)
             self.assertEqual(created.remarque, "Client prioritaire")
             created_id = created.id
+            created_tx = Transaction.query.filter_by(client_id=created_id).first()
+            self.assertIsNotNone(created_tx)
+            self.assertAlmostEqual(created_tx.total_paye, 500.0)
 
         edit_resp = self.client.post(
             f"/clients/{created_id}/modifier",
@@ -235,6 +234,13 @@ class AppTests(unittest.TestCase):
         dashboard_resp = self.client.get("/")
         self.assertEqual(dashboard_resp.status_code, 200)
         self.assertIn(b"Tableau de bord", dashboard_resp.data)
+
+    def test_healthcheck(self):
+        resp = self.client.get("/health")
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.get_json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["database"], "ok")
 
     def test_amount_fields_reject_decimals(self):
         self.login()
@@ -369,7 +375,7 @@ class AppTests(unittest.TestCase):
 
         dashboard_resp = self.client.get("/")
         self.assertEqual(dashboard_resp.status_code, 200)
-        self.assertIn(b"Comparaison mensuelle (saisie historique)", dashboard_resp.data)
+        self.assertIn("Recettes par mois (toutes sources)", dashboard_resp.get_data(as_text=True))
 
 
 if __name__ == "__main__":

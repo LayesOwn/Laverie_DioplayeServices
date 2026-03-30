@@ -3,7 +3,7 @@ DIOLAVERIE - Point d'entrée de l'application Flask
 Pattern : Application Factory
 """
 import os
-from flask import Flask, current_app, render_template
+from flask import Flask, current_app, jsonify, render_template
 from sqlalchemy import inspect, text
 from config import config
 from extensions import db, login_manager, csrf, migrate
@@ -52,6 +52,7 @@ def create_app(config_name: str = None, test_config: dict | None = None) -> Flas
     app.register_blueprint(depenses_bp, url_prefix="/depenses")
     app.register_blueprint(recettes_historiques_bp, url_prefix="/recettes-historiques")
     app.register_blueprint(exports_bp, url_prefix="/exports")
+    _register_healthcheck(app)
 
     _register_error_handlers(app)
 
@@ -62,6 +63,28 @@ def create_app(config_name: str = None, test_config: dict | None = None) -> Flas
         _backfill_legacy_payments()
 
     return app
+
+
+def _register_healthcheck(app: Flask):
+    """Point de contrôle simple pour validation pré-production."""
+
+    @app.get("/health")
+    def health():
+        try:
+            db.session.execute(text("SELECT 1"))
+            database = "ok"
+            status_code = 200
+        except Exception:
+            database = "error"
+            status_code = 503
+
+        return jsonify(
+            {
+                "status": "ok" if database == "ok" else "degraded",
+                "database": database,
+                "environment": os.environ.get("FLASK_ENV", "default"),
+            }
+        ), status_code
 
 
 def _register_error_handlers(app: Flask):
@@ -228,4 +251,4 @@ def _ensure_schema_compatibility():
 
 if __name__ == "__main__":
     app = create_app("development")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)

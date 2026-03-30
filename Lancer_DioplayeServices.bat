@@ -44,8 +44,12 @@ echo  Pour arreter l'application, fermez cette fenetre ou appuyez sur CTRL+C.
 echo  ============================================================
 echo.
 
-:: ---- Lancer Flask ----
-"%PYTHON_EXE%" app.py
+:: ---- Lancer le serveur local de test de facon stable ----
+if exist "run_local_server.py" (
+    "%PYTHON_EXE%" run_local_server.py
+) else (
+    "%PYTHON_EXE%" app.py
+)
 
 :: ---- Fin ----
 echo.
