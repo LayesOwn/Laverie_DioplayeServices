@@ -10,6 +10,7 @@ from models import (
     Service,
     Transaction,
     Paiement,
+    DepenseInterne,
     RecetteJournaliereHistorique,
 )
 
@@ -235,6 +236,72 @@ class AppTests(unittest.TestCase):
         self.assertEqual(dashboard_resp.status_code, 200)
         self.assertIn(b"Tableau de bord", dashboard_resp.data)
 
+    def test_transaction_create_reuses_existing_client_by_search_and_carries_debt(self):
+        self.login()
+
+        with self.app.app_context():
+            old_tx = Transaction(
+                client_id=self.seed_client_id,
+                service_id=self.seed_service_id,
+                quantite=2,
+                total=3000,
+                montant_paye=0,
+                date_transaction=date.today(),
+                notes="Ancienne dette",
+            )
+            db.session.add(old_tx)
+            db.session.flush()
+            old_tx.enregistrer_paiement(
+                montant=1000,
+                date_paiement=date.today(),
+                notes="Ancien acompte",
+            )
+            db.session.commit()
+
+        create_phone_resp = self.client.post(
+            "/transactions/nouvelle",
+            data={
+                "client_search": "770000000",
+                "client_id": "0",
+                "service_id": str(self.seed_service_id),
+                "quantite": "1",
+                "avance": "500",
+                "date_transaction": date.today().isoformat(),
+                "notes": "Recherche par telephone",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(create_phone_resp.status_code, 302)
+
+        with self.app.app_context():
+            transactions = Transaction.query.order_by(Transaction.id.asc()).all()
+            self.assertEqual(len(transactions), 2)
+            self.assertEqual(transactions[-1].client_id, self.seed_client_id)
+            client = db.session.get(ModelClient, self.seed_client_id)
+            self.assertAlmostEqual(client.solde_du, 3000.0)
+
+        create_name_resp = self.client.post(
+            "/transactions/nouvelle",
+            data={
+                "client_search": "Client Seed",
+                "client_id": "0",
+                "service_id": str(self.seed_service_id),
+                "quantite": "1",
+                "avance": "0",
+                "date_transaction": date.today().isoformat(),
+                "notes": "Recherche par nom",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(create_name_resp.status_code, 302)
+
+        with self.app.app_context():
+            self.assertEqual(ModelClient.query.count(), 1)
+            latest_tx = Transaction.query.order_by(Transaction.id.desc()).first()
+            self.assertEqual(latest_tx.client_id, self.seed_client_id)
+            client = db.session.get(ModelClient, self.seed_client_id)
+            self.assertAlmostEqual(client.solde_du, 4500.0)
+
     def test_healthcheck(self):
         resp = self.client.get("/health")
         self.assertEqual(resp.status_code, 200)
@@ -297,6 +364,29 @@ class AppTests(unittest.TestCase):
             self.assertEqual(Paiement.query.filter_by(transaction_id=tx_id).count(), 0)
 
     def test_invite_permissions(self):
+        with self.app.app_context():
+            tx = Transaction(
+                client_id=self.seed_client_id,
+                service_id=self.seed_service_id,
+                quantite=1,
+                total=1500,
+                montant_paye=0,
+                date_transaction=date.today(),
+                notes="Test suppression invite",
+            )
+            depense = DepenseInterne(
+                libelle="Savon",
+                montant=500,
+                type_depense="depense",
+                categorie="Autre",
+                date_depense=date.today(),
+                notes="Test suppression invite",
+            )
+            db.session.add_all([tx, depense])
+            db.session.commit()
+            tx_id = tx.id
+            depense_id = depense.id
+
         self.login(username="invite", password="invite123")
 
         tx_page = self.client.get("/transactions/nouvelle", follow_redirects=False)
@@ -330,8 +420,24 @@ class AppTests(unittest.TestCase):
         self.assertEqual(client_delete.status_code, 302)
         self.assertEqual(client_delete.headers.get("Location"), "/")
 
+        transaction_delete = self.client.post(
+            f"/transactions/{tx_id}/supprimer",
+            follow_redirects=False,
+        )
+        self.assertEqual(transaction_delete.status_code, 302)
+        self.assertEqual(transaction_delete.headers.get("Location"), "/")
+
+        depense_delete = self.client.post(
+            f"/depenses/{depense_id}/supprimer",
+            follow_redirects=False,
+        )
+        self.assertEqual(depense_delete.status_code, 302)
+        self.assertEqual(depense_delete.headers.get("Location"), "/")
+
         with self.app.app_context():
             self.assertIsNotNone(db.session.get(ModelClient, self.seed_client_id))
+            self.assertIsNone(db.session.get(Transaction, tx_id).deleted_at)
+            self.assertIsNone(db.session.get(DepenseInterne, depense_id).deleted_at)
 
     def test_admin_can_create_invite_account(self):
         self.login()

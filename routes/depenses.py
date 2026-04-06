@@ -98,6 +98,7 @@ def edit(dep_id: int):
 # ── Suppression (soft delete) ─────────────────────
 @depenses_bp.route("/<int:dep_id>/supprimer", methods=["POST"])
 @login_required
+@require_admin
 def delete(dep_id: int):
     dep = db.get_or_404(DepenseInterne, dep_id)
     dep.deleted_at = datetime.utcnow()

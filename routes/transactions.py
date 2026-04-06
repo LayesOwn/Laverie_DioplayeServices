@@ -1,5 +1,5 @@
 """
-Blueprint Transactions - Recettes clients avec gestion du crédit.
+Blueprint Transactions - recettes clients avec gestion du credit.
 """
 from datetime import date, datetime
 
@@ -17,8 +17,74 @@ from routes import require_admin
 transactions_bp = Blueprint("transactions", __name__)
 
 
+def _normalize_phone(value: str | None) -> str:
+    return "".join(ch for ch in (value or "") if ch.isdigit())
+
+
+def _normalize_name(value: str | None) -> str:
+    return " ".join((value or "").strip().lower().split())
+
+
+def _find_client_matches(query: str) -> list[Client]:
+    normalized_query = (query or "").strip()
+    if not normalized_query:
+        return []
+
+    phone_query = _normalize_phone(normalized_query)
+    name_query = _normalize_name(normalized_query)
+    matches: list[tuple[int, str, Client]] = []
+
+    for client in Client.query.order_by(Client.nom).all():
+        client_phone = _normalize_phone(client.telephone)
+        client_name = _normalize_name(client.nom)
+
+        if phone_query and client_phone:
+            if client_phone == phone_query:
+                matches.append((0, client.nom, client))
+                continue
+            if phone_query in client_phone:
+                matches.append((1, client.nom, client))
+                continue
+
+        if name_query and client_name:
+            if client_name == name_query:
+                matches.append((0, client.nom, client))
+                continue
+            if name_query in client_name:
+                matches.append((2, client.nom, client))
+
+    matches.sort(key=lambda item: (item[0], item[1]))
+    return [client for _, _, client in matches]
+
+
+def _find_existing_client_by_identity(name: str | None, phone: str | None) -> Client | None:
+    normalized_phone = _normalize_phone(phone)
+    normalized_name = _normalize_name(name)
+
+    for client in Client.query.order_by(Client.nom).all():
+        if normalized_phone and _normalize_phone(client.telephone) == normalized_phone:
+            return client
+        if normalized_name and _normalize_name(client.nom) == normalized_name:
+            return client
+    return None
+
+
+def _build_clients_data() -> list[dict]:
+    return [
+        {
+            "id": client.id,
+            "nom": client.nom,
+            "telephone": client.telephone or "",
+            "adresse": client.adresse or "",
+            "remarque": client.remarque or "",
+            "solde_du": round(float(client.solde_du or 0), 2),
+        }
+        for client in Client.query.order_by(Client.nom).all()
+    ]
+
+
 class DecimalFloatField(FloatField):
-    """FloatField qui accepte la virgule comme séparateur décimal."""
+    """FloatField qui accepte la virgule comme separateur decimal."""
 
     def process_formdata(self, valuelist):
         if not valuelist:
@@ -35,7 +101,7 @@ class DecimalFloatField(FloatField):
 
 
 class StrictIntegerField(IntegerField):
-    """IntegerField strict: refuse les décimales, accepte les espaces."""
+    """IntegerField strict: refuse les decimales, accepte les espaces."""
 
     def process_formdata(self, valuelist):
         if not valuelist:
@@ -46,7 +112,7 @@ class StrictIntegerField(IntegerField):
             return
         if "," in raw_value or "." in raw_value:
             self.data = None
-            raise ValueError("Le montant doit être un entier.")
+            raise ValueError("Le montant doit etre un entier.")
         try:
             self.data = int(raw_value)
         except ValueError as exc:
@@ -55,21 +121,25 @@ class StrictIntegerField(IntegerField):
 
 
 class TransactionForm(FlaskForm):
+    client_search = StringField(
+        "Recherche client",
+        validators=[Optional(), Length(max=100)],
+    )
     client_id = SelectField("Client existant", coerce=int, validators=[Optional()])
 
     new_client_nom = StringField("Nouveau client - Nom complet", validators=[Optional(), Length(max=100)])
-    new_client_telephone = StringField("Nouveau client - Téléphone", validators=[Optional(), Length(max=20)])
+    new_client_telephone = StringField("Nouveau client - Telephone", validators=[Optional(), Length(max=20)])
     new_client_adresse = StringField("Nouveau client - Adresse", validators=[Optional(), Length(max=200)])
     new_client_remarque = StringField("Nouveau client - Remarque", validators=[Optional(), Length(max=300)])
 
     service_id = SelectField("Service", coerce=int, validators=[DataRequired()])
     quantite = DecimalFloatField(
-        "Quantité",
+        "Quantite",
         default=1.0,
         validators=[DataRequired(), NumberRange(min=0.01)],
     )
     avance = StrictIntegerField(
-        "Avance à la commande (XOF)",
+        "Avance a la commande (XOF)",
         default=0,
         validators=[Optional(), NumberRange(min=0)],
     )
@@ -80,7 +150,8 @@ class TransactionForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client_id.choices = [(0, "-- Nouveau client --")] + [
-            (c.id, c.nom) for c in Client.query.order_by(Client.nom).all()
+            (c.id, f"{c.nom} - {c.telephone}" if c.telephone else c.nom)
+            for c in Client.query.order_by(Client.nom).all()
         ]
         self.service_id.choices = [
             (s.id, f"{s.nom} - {s.prix_unitaire:,.0f} XOF")
@@ -91,6 +162,7 @@ class TransactionForm(FlaskForm):
         valid = super().validate(extra_validators=extra_validators)
 
         has_existing_client = bool(self.client_id.data and self.client_id.data > 0)
+        has_search_query = bool((self.client_search.data or "").strip())
         has_new_client = bool((self.new_client_nom.data or "").strip())
 
         if has_existing_client and has_new_client:
@@ -98,8 +170,8 @@ class TransactionForm(FlaskForm):
             self.client_id.errors.append(msg)
             self.new_client_nom.errors.append(msg)
             valid = False
-        elif not has_existing_client and not has_new_client:
-            msg = "Sélectionnez un client existant ou saisissez le nom du nouveau client."
+        elif not has_existing_client and not has_new_client and not has_search_query:
+            msg = "Selectionnez, recherchez ou creez un client avant d'enregistrer la transaction."
             self.client_id.errors.append(msg)
             self.new_client_nom.errors.append(msg)
             valid = False
@@ -108,10 +180,10 @@ class TransactionForm(FlaskForm):
 
 
 class PaiementForm(FlaskForm):
-    """Formulaire pour enregistrer un paiement partiel/total sur une transaction."""
+    """Formulaire pour enregistrer un paiement partiel ou total sur une transaction."""
 
     montant = StrictIntegerField(
-        "Montant reçu (XOF)",
+        "Montant recu (XOF)",
         validators=[DataRequired(), NumberRange(min=1)],
     )
     date_paiement = DateField("Date du paiement", default=date.today, validators=[DataRequired()])
@@ -145,35 +217,63 @@ def index():
 @login_required
 def create():
     form = TransactionForm()
+
+    def render_create():
+        return render_template(
+            "transactions/form.html",
+            form=form,
+            titre="Nouvelle transaction",
+            clients_data=_build_clients_data(),
+        )
+
     if form.validate_on_submit():
         service = db.session.get(Service, form.service_id.data)
         if not service:
             flash("Service introuvable.", "danger")
-            return render_template("transactions/form.html", form=form, titre="Nouvelle transaction")
+            return render_create()
 
         if form.quantite.data <= 0:
-            flash("La quantité doit être supérieure à 0.", "danger")
-            return render_template("transactions/form.html", form=form, titre="Nouvelle transaction")
+            flash("La quantite doit etre superieure a 0.", "danger")
+            return render_create()
 
         client = None
         created_new_client = False
+        reused_existing_client = False
 
         if form.client_id.data and form.client_id.data > 0:
             client = db.session.get(Client, form.client_id.data)
             if not client:
                 flash("Client introuvable.", "danger")
-                return render_template("transactions/form.html", form=form, titre="Nouvelle transaction")
-        else:
-            client = Client(
-                nom=(form.new_client_nom.data or "").strip(),
-                telephone=(form.new_client_telephone.data or "").strip() or None,
-                adresse=(form.new_client_adresse.data or "").strip() or None,
-                remarque=(form.new_client_remarque.data or "").strip() or None,
+                return render_create()
+        elif (form.client_search.data or "").strip():
+            matches = _find_client_matches(form.client_search.data)
+            if len(matches) == 1:
+                client = matches[0]
+            elif len(matches) > 1:
+                form.client_search.errors.append(
+                    "Plusieurs clients correspondent. Choisissez-en un dans la liste."
+                )
+                return render_create()
+        if client is None:
+            existing_client = _find_existing_client_by_identity(
+                form.new_client_nom.data,
+                form.new_client_telephone.data,
             )
-            db.session.add(client)
-            db.session.flush()
-            created_new_client = True
+            if existing_client:
+                client = existing_client
+                reused_existing_client = True
+            else:
+                client = Client(
+                    nom=(form.new_client_nom.data or "").strip(),
+                    telephone=(form.new_client_telephone.data or "").strip() or None,
+                    adresse=(form.new_client_adresse.data or "").strip() or None,
+                    remarque=(form.new_client_remarque.data or "").strip() or None,
+                )
+                db.session.add(client)
+                db.session.flush()
+                created_new_client = True
 
+        old_solde_du = float(client.solde_du or 0)
         quantite = float(form.quantite.data)
         total = int(round(float(service.prix_unitaire) * quantite))
         avance = int(form.avance.data or 0)
@@ -196,37 +296,46 @@ def create():
             transaction.enregistrer_paiement(
                 montant=avance,
                 date_paiement=form.date_transaction.data,
-                notes="Avance à la commande",
+                notes="Avance a la commande",
                 created_by_id=current_user.id,
             )
 
         db.session.commit()
 
         if created_new_client:
-            flash(f"Nouveau client '{client.nom}' créé et lié à la transaction.", "info")
+            flash(f"Nouveau client '{client.nom}' cree et lie a la transaction.", "info")
+        elif reused_existing_client or (form.client_search.data or "").strip():
+            flash(f"Client existant reconnu : {client.nom}.", "info")
 
         flash(
-            f"Transaction enregistrée - Total : {total:,.0f} XOF | "
+            f"Transaction enregistree - Total : {total:,.0f} XOF | "
             f"Avance : {avance:,.0f} XOF | "
             f"Reste : {transaction.solde_restant:,.0f} XOF",
             "success",
         )
 
+        if old_solde_du > 0:
+            flash(
+                f"Ancienne dette : {old_solde_du:,.0f} XOF | "
+                f"Encours total client apres cette transaction : {client.solde_du:,.0f} XOF",
+                "warning",
+            )
+
         if avance <= 0:
-            flash("Aucune avance: paiement prévu au retrait.", "warning")
+            flash("Aucune avance : paiement prevu au retrait.", "warning")
         elif avance < total:
-            flash("Avance partielle enregistrée: solde à régler au retrait.", "info")
+            flash("Avance partielle enregistree : solde a regler au retrait.", "info")
 
         if client.solde_du > 0:
             flash(
-                f"État client: débiteur ({client.solde_du:,.0f} XOF restant dû).",
+                f"Etat client : debiteur ({client.solde_du:,.0f} XOF restant du).",
                 "warning",
             )
         else:
-            flash("État client: soldé (aucun montant dû).", "success")
+            flash("Etat client : solde (aucun montant du).", "success")
         return redirect(url_for("transactions.index"))
 
-    return render_template("transactions/form.html", form=form, titre="Nouvelle transaction")
+    return render_create()
 
 
 @transactions_bp.route("/<int:tx_id>/paiement", methods=["GET", "POST"])
@@ -243,13 +352,13 @@ def paiement(tx_id: int):
             created_by_id=current_user.id,
         )
         if paye <= 0:
-            flash("Aucun paiement enregistré (transaction déjà soldée).", "warning")
+            flash("Aucun paiement enregistre (transaction deja soldee).", "warning")
             return redirect(url_for("clients.detail", client_id=tx.client_id))
 
         db.session.commit()
         flash(
-            f"Paiement de {paye:,.0f} XOF enregistré. "
-            f"Reste dû : {tx.solde_restant:,.0f} XOF",
+            f"Paiement de {paye:,.0f} XOF enregistre. "
+            f"Reste du : {tx.solde_restant:,.0f} XOF",
             "success",
         )
         return redirect(url_for("clients.detail", client_id=tx.client_id))
@@ -260,12 +369,13 @@ def paiement(tx_id: int):
 
 @transactions_bp.route("/<int:tx_id>/supprimer", methods=["POST"])
 @login_required
+@require_admin
 def delete(tx_id: int):
     tx = db.get_or_404(Transaction, tx_id)
     client_id = tx.client_id
     tx.deleted_at = datetime.utcnow()
     db.session.commit()
-    flash("Transaction déplacée dans la corbeille.", "warning")
+    flash("Transaction deplacee dans la corbeille.", "warning")
     return redirect(url_for("clients.detail", client_id=client_id))
 
 
@@ -293,7 +403,7 @@ def restaurer(tx_id: int):
     tx = db.get_or_404(Transaction, tx_id)
     tx.deleted_at = None
     db.session.commit()
-    flash("Transaction restaurée.", "success")
+    flash("Transaction restauree.", "success")
     return redirect(url_for("transactions.corbeille"))
 
 
