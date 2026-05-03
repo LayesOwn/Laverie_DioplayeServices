@@ -50,7 +50,12 @@ def transactions_csv():
 @exports_bp.route("/depenses/csv")
 @login_required
 def depenses_csv():
-    depenses = DepenseInterne.query.order_by(DepenseInterne.date_depense.desc()).all()
+    depenses = (
+        DepenseInterne.query
+        .filter(DepenseInterne.deleted_at == None)  # noqa: E711
+        .order_by(DepenseInterne.date_depense.desc())
+        .all()
+    )
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")
     writer.writerow(["ID", "Date", "Libellé", "Type", "Catégorie", "Montant (XOF)", "Notes"])
