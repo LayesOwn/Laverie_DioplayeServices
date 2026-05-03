@@ -3,7 +3,7 @@ DIOLAVERIE - Point d'entrée de l'application Flask
 Pattern : Application Factory
 """
 import os
-from flask import Flask, current_app, jsonify, render_template
+from flask import Flask, current_app, jsonify, render_template, send_from_directory
 from sqlalchemy import inspect, text
 from config import config
 from extensions import db, login_manager, csrf, migrate
@@ -53,7 +53,7 @@ def create_app(config_name: str = None, test_config: dict | None = None) -> Flas
     app.register_blueprint(recettes_historiques_bp, url_prefix="/recettes-historiques")
     app.register_blueprint(exports_bp, url_prefix="/exports")
     _register_healthcheck(app)
-
+    _register_pwa_routes(app)
     _register_error_handlers(app)
 
     with app.app_context():
@@ -63,6 +63,23 @@ def create_app(config_name: str = None, test_config: dict | None = None) -> Flas
         _backfill_legacy_payments()
 
     return app
+
+
+def _register_pwa_routes(app: Flask):
+    """Sert le service worker depuis la racine (scope = /)."""
+
+    @app.get("/sw.js")
+    def service_worker():
+        response = send_from_directory(app.static_folder, "sw.js",
+                                       mimetype="application/javascript")
+        response.headers["Service-Worker-Allowed"] = "/"
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+    @app.get("/manifest.json")
+    def web_manifest():
+        return send_from_directory(app.static_folder, "manifest.json",
+                                   mimetype="application/manifest+json")
 
 
 def _register_healthcheck(app: Flask):
