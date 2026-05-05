@@ -1,145 +1,242 @@
 {% extends "base.html" %}
 {% block title %}Recettes Historiques{% endblock %}
-{% block page_title %}Recettes Historiques{% endblock %}
+{% block page_title %}Recettes journalières{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h4 class="fw-bold mb-0"><i class="bi bi-calendar-week text-primary me-2"></i>Bloc parallèle: recettes journalières</h4>
-</div>
 
-<div class="row g-3 mb-3">
-  <div class="col-lg-5">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-0 fw-semibold">Saisie unitaire</div>
-      <div class="card-body">
-        <form method="POST" action="{{ url_for('recettes_historiques.add') }}">
-          {{ form.hidden_tag() }}
-          <div class="mb-3">
-            {{ form.date_recette.label(class="form-label fw-semibold small") }}
-            {{ form.date_recette(class="form-control" + (" is-invalid" if form.date_recette.errors else "")) }}
-            {% for e in form.date_recette.errors %}
-            <div class="invalid-feedback d-block">{{ e }}</div>
-            {% endfor %}
-          </div>
-          <div class="mb-3">
-            {{ form.montant.label(class="form-label fw-semibold small") }}
-            <div class="input-group">
-              {{ form.montant(class="form-control" + (" is-invalid" if form.montant.errors else ""), min=0, step=1) }}
-              <span class="input-group-text">XOF</span>
-            </div>
-            {% for e in form.montant.errors %}
-            <div class="invalid-feedback d-block">{{ e }}</div>
-            {% endfor %}
-          </div>
-          <div class="mb-3">
-            {{ form.notes.label(class="form-label fw-semibold small") }}
-            {{ form.notes(class="form-control", placeholder="Optionnel") }}
-          </div>
-          <button type="submit" class="btn btn-primary btn-sm">
-            <i class="bi bi-check-lg me-1"></i>Enregistrer
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
+{# ── Navigation mois ─────────────────────────────────────────────── #}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h5 class="fw-bold mb-0">
+    <i class="bi bi-calendar-week text-primary me-2"></i>Rattrapage des recettes journalières
+  </h5>
 
-  <div class="col-lg-7">
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-0 fw-semibold">Import en bloc 2024/2025</div>
-      <div class="card-body">
-        <form method="POST" action="{{ url_for('recettes_historiques.importer') }}">
-          {{ import_form.hidden_tag() }}
-          <label class="form-label fw-semibold small">{{ import_form.lignes.label.text }}</label>
-          {{ import_form.lignes(
-              class="form-control font-monospace",
-              rows="9",
-              placeholder="2024-01-01;85000;Ouverture année\n2024-01-02;92000\n2025-01-01;110000"
-            )
-          }}
-          <div class="form-text mt-2">Une ligne par jour. Montant entier uniquement. Si la date existe déjà, elle est mise à jour.</div>
-          <button type="submit" class="btn btn-outline-primary btn-sm mt-3">
-            <i class="bi bi-upload me-1"></i>Importer
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
+  <div class="d-flex align-items-center gap-2">
+    <a href="{{ url_for('recettes_historiques.index', mois=prev_mois, annee=prev_annee) }}"
+       class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i></a>
 
-<div class="card border-0 shadow-sm">
-  <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
-    <span class="fw-semibold">Historique saisi</span>
-    <form method="GET" class="d-flex gap-2">
-      <select name="annee" class="form-select form-select-sm">
-        <option value="">Toutes années</option>
+    <form method="GET" class="d-flex gap-1 align-items-center">
+      <select name="mois" class="form-select form-select-sm" style="width:120px" onchange="this.form.submit()">
+        {% for i, nom in enumerate(MOIS_NOMS) %}
+        <option value="{{ i+1 }}" {% if mois == i+1 %}selected{% endif %}>{{ nom }}</option>
+        {% endfor %}
+      </select>
+      <select name="annee" class="form-select form-select-sm" style="width:85px" onchange="this.form.submit()">
         {% for a in annees %}
         <option value="{{ a }}" {% if annee == a %}selected{% endif %}>{{ a }}</option>
         {% endfor %}
       </select>
-      <button class="btn btn-outline-secondary btn-sm">Filtrer</button>
     </form>
-  </div>
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th class="text-end">Recette</th>
-            <th>Notes</th>
-            <th class="text-center">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in recettes %}
-          <tr>
-            <td>{{ r.date_recette.strftime("%d/%m/%Y") }}</td>
-            <td class="text-end fw-semibold text-success">{{ "{:,.0f}".format(r.montant) }} XOF</td>
-            <td>{{ r.notes or "-" }}</td>
-            <td class="text-center">
-              <form method="POST" action="{{ url_for('recettes_historiques.delete', entry_id=r.id) }}" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-outline-danger btn-sm"
-                        onclick="return confirm('Supprimer cette recette historique ?');">
-                  <i class="bi bi-trash"></i>
-                </button>
-              </form>
-            </td>
-          </tr>
-          {% else %}
-          <tr>
-            <td colspan="4" class="text-center text-muted py-4">Aucune recette historique saisie.</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+
+    <a href="{{ url_for('recettes_historiques.index', mois=next_mois, annee=next_annee) }}"
+       class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-right"></i></a>
+
+    <a href="{{ url_for('recettes_historiques.index', mois=today.month, annee=today.year) }}"
+       class="btn btn-primary btn-sm">Aujourd'hui</a>
   </div>
 </div>
 
-{% if pagination.pages > 1 %}
-<nav class="mt-3">
-  <ul class="pagination pagination-sm justify-content-center">
-    {% if pagination.has_prev %}
-    <li class="page-item">
-      <a class="page-link" href="{{ url_for('recettes_historiques.index', page=pagination.prev_num, annee=annee) }}">&laquo;</a>
-    </li>
-    {% endif %}
-    {% for p in pagination.iter_pages() %}
-    <li class="page-item {% if p == pagination.page %}active{% endif %}">
-      {% if p %}
-      <a class="page-link" href="{{ url_for('recettes_historiques.index', page=p, annee=annee) }}">{{ p }}</a>
-      {% else %}
-      <span class="page-link">...</span>
-      {% endif %}
-    </li>
-    {% endfor %}
-    {% if pagination.has_next %}
-    <li class="page-item">
-      <a class="page-link" href="{{ url_for('recettes_historiques.index', page=pagination.next_num, annee=annee) }}">&raquo;</a>
-    </li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{# ── Compteurs ────────────────────────────────────────────────────── #}
+<div class="d-flex gap-3 mb-3 flex-wrap">
+  <span class="badge bg-success fs-6 px-3 py-2">
+    <i class="bi bi-check-circle me-1"></i>{{ nb_saisis }} jour{{ 's' if nb_saisis > 1 }} saisi{{ 's' if nb_saisis > 1 }}
+  </span>
+  {% if nb_manquants > 0 %}
+  <span class="badge bg-danger fs-6 px-3 py-2">
+    <i class="bi bi-exclamation-circle me-1"></i>{{ nb_manquants }} jour{{ 's' if nb_manquants > 1 }} manquant{{ 's' if nb_manquants > 1 }}
+  </span>
+  {% else %}
+  <span class="badge bg-secondary fs-6 px-3 py-2">
+    <i class="bi bi-check-all me-1"></i>Mois complet
+  </span>
+  {% endif %}
+  <span class="text-muted small align-self-center fw-semibold">{{ mois_nom }} {{ annee }}</span>
+</div>
+
+<div class="row g-3">
+
+  {# ── Calendrier ────────────────────────────────────────────────── #}
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 fw-semibold small text-muted">
+        Cliquez sur un jour manquant pour le remplir
+      </div>
+      <div class="card-body p-2">
+        <div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:4px;">
+          {% for jour_label in ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'] %}
+          <div class="text-center text-muted small fw-semibold py-1">{{ jour_label }}</div>
+          {% endfor %}
+
+          {# Décalage du premier jour (lundi=0) #}
+          {% set first_weekday = jours[0].date.weekday() %}
+          {% for _ in range(first_weekday) %}
+          <div></div>
+          {% endfor %}
+
+          {% for j in jours %}
+            {% if j.futur %}
+              {# Jour futur : gris clair #}
+              <div class="text-center rounded p-1" style="background:#f8f9fa; opacity:.4;">
+                <div class="fw-bold small">{{ j.date.day }}</div>
+              </div>
+
+            {% elif j.entry %}
+              {# Jour saisi : vert, cliquable pour modifier #}
+              <div class="text-center rounded p-1 jour-saisi"
+                   style="background:#d1fae5; cursor:pointer; border:1px solid #6ee7b7;"
+                   onclick="prefillForm('{{ j.date.isoformat() }}', {{ j.entry.montant }}, '{{ j.entry.notes or '' }}')"
+                   title="Modifier : {{ '{:,.0f}'.format(j.entry.montant) }} XOF">
+                <div class="fw-bold small">{{ j.date.day }}</div>
+                <div style="font-size:0.62rem; color:#065f46; white-space:nowrap; overflow:hidden;">
+                  {{ '{:,.0f}'.format(j.entry.montant) }}
+                </div>
+              </div>
+
+            {% else %}
+              {# Jour manquant : orange/rouge, cliquable pour saisir #}
+              <div class="text-center rounded p-1 jour-manquant"
+                   style="background:#fee2e2; cursor:pointer; border:1px solid #fca5a5;"
+                   onclick="prefillForm('{{ j.date.isoformat() }}', '', '')"
+                   title="Saisir le {{ j.date.strftime('%d/%m/%Y') }}">
+                <div class="fw-bold small text-danger">{{ j.date.day }}</div>
+                <div style="font-size:0.62rem; color:#991b1b;">Manquant</div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        {# Légende #}
+        <div class="d-flex gap-3 mt-3 ms-1 flex-wrap">
+          <span class="d-flex align-items-center gap-1 small">
+            <span style="width:14px;height:14px;background:#d1fae5;border:1px solid #6ee7b7;border-radius:3px;display:inline-block;"></span> Saisi
+          </span>
+          <span class="d-flex align-items-center gap-1 small">
+            <span style="width:14px;height:14px;background:#fee2e2;border:1px solid #fca5a5;border-radius:3px;display:inline-block;"></span> Manquant
+          </span>
+          <span class="d-flex align-items-center gap-1 small text-muted">
+            <span style="width:14px;height:14px;background:#f8f9fa;border-radius:3px;display:inline-block;opacity:.5;"></span> Futur
+          </span>
+        </div>
+      </div>
+    </div>
+
+    {# Import en bloc #}
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-header bg-white border-0 fw-semibold d-flex justify-content-between align-items-center"
+           style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#importBloc">
+        <span><i class="bi bi-upload me-2 text-primary"></i>Import en bloc (plusieurs jours d'un coup)</span>
+        <i class="bi bi-chevron-down small text-muted"></i>
+      </div>
+      <div class="collapse" id="importBloc">
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('recettes_historiques.importer') }}">
+            {{ import_form.hidden_tag() }}
+            {{ import_form.lignes(
+                class="form-control font-monospace",
+                rows="6",
+                placeholder="2024-01-01;85000;Ouverture année\n2024-01-02;92000\n2024-01-03;78000"
+            ) }}
+            <div class="form-text mt-1">
+              Format : <code>AAAA-MM-JJ;montant;notes (optionnel)</code> — une ligne par jour.
+            </div>
+            <button type="submit" class="btn btn-outline-primary btn-sm mt-2">
+              <i class="bi bi-upload me-1"></i>Importer
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Formulaire de saisie ─────────────────────────────────────── #}
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm" id="formCard" style="position:sticky; top:70px;">
+      <div class="card-header border-0 fw-semibold" style="background:#f0f4ff;">
+        <i class="bi bi-pencil-fill text-primary me-2"></i>
+        <span id="formTitre">Saisir / modifier une recette</span>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('recettes_historiques.add') }}" id="saisiForm">
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Date</label>
+            <input type="date" name="date_recette" id="champDate"
+                   class="form-control form-control-sm"
+                   value="{{ form.date_recette.data or today }}" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Recette du jour (XOF)</label>
+            <div class="input-group input-group-sm">
+              <input type="number" name="montant" id="champMontant"
+                     class="form-control" min="0" step="1"
+                     placeholder="ex: 85000" required>
+              <span class="input-group-text">XOF</span>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Notes <span class="text-muted">(optionnel)</span></label>
+            <input type="text" name="notes" id="champNotes"
+                   class="form-control form-control-sm"
+                   placeholder="ex: Journée chargée">
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm flex-grow-1" id="btnSauver">
+              <i class="bi bi-check-lg me-1"></i>Enregistrer
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetForm()">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+        </form>
+
+        {# Raccourci : jours manquants à remplir #}
+        {% set manquants = jours | selectattr('entry', 'none') | selectattr('futur', 'false') | list %}
+        {% if manquants %}
+        <hr class="my-3">
+        <div class="small fw-semibold text-muted mb-2">Jours manquants à rattraper :</div>
+        <div class="d-flex flex-wrap gap-1">
+          {% for j in manquants %}
+          <button class="btn btn-outline-danger btn-sm py-0 px-2"
+                  onclick="prefillForm('{{ j.date.isoformat() }}', '', '')"
+                  style="font-size:.75rem;">
+            {{ j.date.strftime('%d/%m') }}
+          </button>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function prefillForm(dateStr, montant, notes) {
+  document.getElementById('champDate').value   = dateStr;
+  document.getElementById('champMontant').value = montant || '';
+  document.getElementById('champNotes').value  = notes || '';
+
+  const parts = dateStr.split('-');
+  const label = parts[2] + '/' + parts[1] + '/' + parts[0];
+  document.getElementById('formTitre').textContent = montant
+    ? 'Modifier — ' + label
+    : 'Saisir — ' + label;
+
+  document.getElementById('formCard').scrollIntoView({behavior:'smooth', block:'start'});
+  setTimeout(() => document.getElementById('champMontant').focus(), 350);
+}
+
+function resetForm() {
+  document.getElementById('champDate').value    = '{{ today }}';
+  document.getElementById('champMontant').value = '';
+  document.getElementById('champNotes').value   = '';
+  document.getElementById('formTitre').textContent = 'Saisir / modifier une recette';
+}
+</script>
 {% endblock %}

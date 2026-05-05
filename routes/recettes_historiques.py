@@ -84,35 +84,80 @@ def _parse_bulk_line(line: str):
 @login_required
 @require_admin
 def index():
+    from calendar import monthrange
+
+    today = date.today()
+    annee = request.args.get("annee", today.year, type=int)
+    mois  = request.args.get("mois",  today.month, type=int)
+    mois  = max(1, min(12, mois))
+
     form = RecetteHistoriqueForm()
     import_form = ImportRecettesForm()
-    page = request.args.get("page", 1, type=int)
-    annee = request.args.get("annee", type=int)
 
-    query = RecetteJournaliereHistorique.query
-    if annee:
-        query = query.filter(extract("year", RecetteJournaliereHistorique.date_recette) == annee)
+    # Jours du mois sélectionné
+    _, nb_jours = monthrange(annee, mois)
+    all_days = [date(annee, mois, d) for d in range(1, nb_jours + 1)]
 
-    pagination = query.order_by(RecetteJournaliereHistorique.date_recette.desc()).paginate(
-        page=page, per_page=Config.ITEMS_PER_PAGE, error_out=False
-    )
+    # Entrées déjà saisies pour ce mois
+    entries_mois = {
+        r.date_recette: r
+        for r in RecetteJournaliereHistorique.query.filter(
+            extract("year",  RecetteJournaliereHistorique.date_recette) == annee,
+            extract("month", RecetteJournaliereHistorique.date_recette) == mois,
+        ).all()
+    }
 
-    annees = [
-        int(value)
-        for (value,) in db.session.query(
+    jours = []
+    for d in all_days:
+        jours.append({
+            "date":   d,
+            "entry":  entries_mois.get(d),
+            "futur":  d > today,
+        })
+
+    nb_saisis    = len(entries_mois)
+    nb_manquants = sum(1 for j in jours if not j["entry"] and not j["futur"])
+
+    # Années disponibles (+ année courante toujours présente)
+    annees_db = [
+        int(v)
+        for (v,) in db.session.query(
             extract("year", RecetteJournaliereHistorique.date_recette)
-        ).distinct().order_by(extract("year", RecetteJournaliereHistorique.date_recette).desc()).all()
-        if value is not None
+        ).distinct().order_by(
+            extract("year", RecetteJournaliereHistorique.date_recette).desc()
+        ).all()
+        if v is not None
     ]
+    annees = sorted(set(annees_db) | {today.year}, reverse=True)
+
+    # Mois précédent / suivant
+    if mois == 1:
+        prev_mois, prev_annee = 12, annee - 1
+    else:
+        prev_mois, prev_annee = mois - 1, annee
+    if mois == 12:
+        next_mois, next_annee = 1, annee + 1
+    else:
+        next_mois, next_annee = mois + 1, annee
+
+    MOIS_NOMS = ["Janvier","Février","Mars","Avril","Mai","Juin",
+                 "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
 
     return render_template(
         "recettes_historiques/index.html",
         form=form,
         import_form=import_form,
-        recettes=pagination.items,
-        pagination=pagination,
+        jours=jours,
         annee=annee,
+        mois=mois,
+        mois_nom=MOIS_NOMS[mois - 1],
         annees=annees,
+        nb_saisis=nb_saisis,
+        nb_manquants=nb_manquants,
+        prev_mois=prev_mois, prev_annee=prev_annee,
+        next_mois=next_mois, next_annee=next_annee,
+        today=today,
+        MOIS_NOMS=MOIS_NOMS,
     )
 
 
