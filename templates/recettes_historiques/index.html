@@ -16,8 +16,8 @@
 
     <form method="GET" class="d-flex gap-1 align-items-center">
       <select name="mois" class="form-select form-select-sm" style="width:120px" onchange="this.form.submit()">
-        {% for i, nom in enumerate(MOIS_NOMS) %}
-        <option value="{{ i+1 }}" {% if mois == i+1 %}selected{% endif %}>{{ nom }}</option>
+        {% for nom in MOIS_NOMS %}
+        <option value="{{ loop.index }}" {% if mois == loop.index %}selected{% endif %}>{{ nom }}</option>
         {% endfor %}
       </select>
       <select name="annee" class="form-select form-select-sm" style="width:85px" onchange="this.form.submit()">
@@ -193,7 +193,7 @@
         </form>
 
         {# Raccourci : jours manquants à remplir #}
-        {% set manquants = jours | selectattr('entry', 'none') | selectattr('futur', 'false') | list %}
+        {% set manquants = jours | selectattr('entry', 'none') | rejectattr('futur') | list %}
         {% if manquants %}
         <hr class="my-3">
         <div class="small fw-semibold text-muted mb-2">Jours manquants à rattraper :</div>
