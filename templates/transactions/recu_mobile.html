@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reçu #{{ "%04d"|format(tx.id) }}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+    }
+
+    /* Boutons d'action (hors reçu, non capturés) */
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: sans-serif;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-dl   { background: #2563eb; color: #fff; }
+    .btn-back { background: #6b7280; color: #fff; }
+
+    /* Reçu — largeur 320px ≈ papier 58mm */
+    #recu {
+      background: #fff;
+      width: 320px;
+      padding: 14px 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #000;
+    }
+
+    .r-header { text-align: center; margin-bottom: 10px; }
+    .r-title   { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
+    .r-sub     { font-size: 11px; color: #444; }
+
+    .r-divider { border: none; border-top: 1px dashed #000; margin: 8px 0; }
+
+    .r-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 2px 0;
+    }
+    .r-label { color: #444; }
+    .r-value { font-weight: bold; text-align: right; max-width: 60%; }
+
+    .r-total-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: bold;
+      margin: 4px 0;
+    }
+
+    .r-solde {
+      text-align: center;
+      margin-top: 6px;
+      font-size: 11px;
+      padding: 4px;
+      border: 1px solid #000;
+    }
+    .r-solde.solde    { background: #000; color: #fff; }
+    .r-solde.en-cours { background: #fff; color: #000; }
+
+    .r-footer { text-align: center; margin-top: 10px; font-size: 10px; color: #666; }
+  </style>
+</head>
+<body>
+
+  <div class="actions" id="actions">
+    <button class="btn btn-dl" onclick="telecharger()">Télécharger image</button>
+    <button class="btn btn-back" onclick="history.back()">Retour</button>
+  </div>
+
+  <div id="recu">
+    <div class="r-header">
+      <div class="r-title">DIOPLAYE SERVICES</div>
+      <div class="r-sub">Laverie — Sénégal</div>
+      <div class="r-sub">Reçu N° {{ "%04d"|format(tx.id) }}</div>
+    </div>
+
+    <hr class="r-divider">
+
+    <div class="r-row">
+      <span class="r-label">Date</span>
+      <span class="r-value">{{ tx.date_transaction.strftime("%d/%m/%Y") }}</span>
+    </div>
+    <div class="r-row">
+      <span class="r-label">Client</span>
+      <span class="r-value">{{ tx.client.nom }}</span>
+    </div>
+    {% if tx.client.telephone %}
+    <div class="r-row">
+      <span class="r-label">Tél.</span>
+      <span class="r-value">{{ tx.client.telephone }}</span>
+    </div>
+    {% endif %}
+
+    <hr class="r-divider">
+
+    <div class="r-row">
+      <span class="r-label">Service</span>
+      <span class="r-value">{{ tx.service.nom }}</span>
+    </div>
+    <div class="r-row">
+      <span class="r-label">Qté</span>
+      <span class="r-value">{{ "{:g}".format(tx.quantite) }}</span>
+    </div>
+    <div class="r-row">
+      <span class="r-label">Prix unit.</span>
+      <span class="r-value">{{ "{:,.0f}".format(tx.service.prix_unitaire) }} XOF</span>
+    </div>
+
+    <hr class="r-divider">
+
+    <div class="r-total-row">
+      <span>TOTAL</span>
+      <span>{{ "{:,.0f}".format(tx.total) }} XOF</span>
+    </div>
+    <div class="r-row">
+      <span class="r-label">Payé</span>
+      <span class="r-value">{{ "{:,.0f}".format(tx.total_paye) }} XOF</span>
+    </div>
+    <div class="r-row">
+      <span class="r-label">Reste dû</span>
+      <span class="r-value">{{ "{:,.0f}".format(tx.solde_restant) }} XOF</span>
+    </div>
+
+    {% if tx.notes %}
+    <hr class="r-divider">
+    <div class="r-row">
+      <span class="r-label">Notes</span>
+      <span class="r-value">{{ tx.notes }}</span>
+    </div>
+    {% endif %}
+
+    <hr class="r-divider">
+
+    <div class="r-solde {{ 'solde' if tx.est_solde else 'en-cours' }}">
+      {% if tx.est_solde %}SOLDE — MERCI !{% else %}SOLDE AU RETRAIT{% endif %}
+    </div>
+
+    <div class="r-footer">
+      Merci pour votre confiance<br>
+      {{ tx.created_at.strftime("%d/%m/%Y %H:%M") if tx.created_at else "" }}
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script>
+  async function telecharger() {
+    const btn = document.querySelector('.btn-dl');
+    btn.textContent = 'Génération…';
+    btn.disabled = true;
+
+    const recu = document.getElementById('recu');
+    const canvas = await html2canvas(recu, {
+      scale: 3,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+    });
+
+    const url = canvas.toDataURL('image/png');
+    const nom = 'recu_{{ "%04d"|format(tx.id) }}_{{ tx.client.nom | replace(" ", "_") }}.png';
+
+    // Web Share API (Android Chrome) → partager directement vers l'app d'imprimante
+    if (navigator.canShare) {
+      try {
+        const blob = await (await fetch(url)).blob();
+        const file = new File([blob], nom, { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Reçu Dioplaye Services' });
+          btn.textContent = 'Télécharger image';
+          btn.disabled = false;
+          return;
+        }
+      } catch(e) {}
+    }
+
+    // Fallback : téléchargement direct
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nom;
+    a.click();
+
+    btn.textContent = 'Télécharger image';
+    btn.disabled = false;
+  }
+  </script>
+</body>
+</html>

@@ -199,3 +199,12 @@ def recu_pdf(tx_id: int):
     return send_file(buf, as_attachment=False,
                      download_name=f"recu_{tx.id:04d}.pdf",
                      mimetype="application/pdf")
+
+
+# ── Reçu mobile (imprimante thermique 58mm) ───────
+@exports_bp.route("/recu/<int:tx_id>/mobile")
+@login_required
+def recu_mobile(tx_id: int):
+    from flask import render_template
+    tx = db.get_or_404(Transaction, tx_id)
+    return render_template("transactions/recu_mobile.html", tx=tx)

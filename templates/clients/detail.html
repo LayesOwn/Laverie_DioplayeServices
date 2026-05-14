@@ -118,6 +118,9 @@
                 <a href="{{ url_for('exports.recu_pdf', tx_id=tx.id) }}" class="btn btn-outline-primary" title="Reçu PDF" target="_blank">
                   <i class="bi bi-file-pdf"></i>
                 </a>
+                <a href="{{ url_for('exports.recu_mobile', tx_id=tx.id) }}" class="btn btn-outline-success" title="Reçu mobile (imprimante)" target="_blank">
+                  <i class="bi bi-printer"></i>
+                </a>
                 {% if not tx.est_solde %}
                 <a href="{{ url_for('transactions.paiement', tx_id=tx.id) }}" class="btn btn-outline-success" title="Encaisser / Retrait">
                   <i class="bi bi-cash"></i>
